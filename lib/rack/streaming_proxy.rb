@@ -1,5 +1,6 @@
+module Rack
+  class StreamingProxy
 
-module RackStreamingProxy
 
   # :stopdoc:
   VERSION = '1.0.0'
@@ -42,7 +43,8 @@ module RackStreamingProxy
     Dir.glob(search_me).sort.each {|rb| require rb}
   end
 
-end  # module RackStreamingProxy
+  end
 
-RackStreamingProxy.require_all_libs_relative_to(__FILE__)
+end
 
+Rack::StreamingProxy.require_all_libs_relative_to(__FILE__)

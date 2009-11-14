@@ -1,4 +1,3 @@
-
 begin
   require 'bones'
 rescue LoadError
@@ -6,18 +5,16 @@ rescue LoadError
 end
 
 ensure_in_path 'lib'
-require 'rack-streaming-proxy'
+require 'rack/streaming_proxy'
 
-task :default => 'test:run'
-task 'gem:release' => 'test:run'
+task :default => 'spec:specdoc'
+task 'gem:release' => 'spec:specdoc'
 
 Bones {
-  name  'rack-streaming-proxy'
+  name  'rack-streaming_proxy'
   authors  'Nathan Witmer'
   email  'nwitmer@gmail.com'
-  url  'http://github.com/aniero/rack-streaming-proxy'
+  url  'http://github.com/aniero/rack-streaming_proxy'
   version  RackStreamingProxy::VERSION
   ignore_file  '.gitignore'
 }
-
-# EOF

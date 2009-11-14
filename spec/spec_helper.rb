@@ -1,6 +1,5 @@
-
 require File.expand_path(
-    File.join(File.dirname(__FILE__), %w[.. lib rack-streaming-proxy]))
+    File.join(File.dirname(__FILE__), %w[.. lib rack streaming_proxy]))
 
 Spec::Runner.configure do |config|
   # == Mock Framework
