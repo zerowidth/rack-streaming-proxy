@@ -1,32 +1,55 @@
-rack-streaming-proxy
-    by FIXME (your name)
-    FIXME (url)
+rack-streaming_proxy
+    by Nathan Witmer <nwitmer@gmail.com>
+    http://github.com/aniero/rack-streaming_proxy
 
 == DESCRIPTION:
 
-FIXME (describe your package)
+Streaming proxy for Rack, the rainbows to Rack::Proxy's unicorn.
 
 == FEATURES/PROBLEMS:
 
-* FIXME (list of features or problems)
+Provides a (mostly) transparent streaming proxy to be used as rack
+middleware. Handles chunked encoding, and will stream the response
+body for an upstream request back to the client.
+
+Use this when you need to have the response streamed back to the client,
+for example when handling large file requests that could be proxied
+directly but need to be authenticated against the rest of your middleware
+stack.
+
+Please note that this will not work well with EventMachine. EM buffers
+the entire rack response before sending it to the client. When testing,
+try mongrel (via rackup) or passenger, rather than the EM-based thin. See
+http://groups.google.com/group/thin-ruby/browse_thread/thread/4762f8f851b965f6
+for more discussion.
+
+I've included a simple streamer app for testing and development.
 
 == SYNOPSIS:
 
-  FIXME (code sample of usage)
+  require "rack/streaming_proxy"
+
+  use Rack::StreamingProxy do |request|
+    # inside the request block, return the full URI to redirect the request to,
+    # or nil/false if the request should continue on down the middleware stack.
+    if request.path.start_with?("/proxy")
+      "http://another_server#{request.path}"
+    end
+  end
 
 == REQUIREMENTS:
 
-* FIXME (list of requirements)
+* servolux (gem install servolux)
 
 == INSTALL:
 
-* FIXME (sudo gem install, anything else)
+* sudo gem install rack-streaming_proxy --source http://gemcutter.org
 
 == LICENSE:
 
 (The MIT License)
 
-Copyright (c) 2009 FIXME (different license?)
+Copyright (c) 2009 Nathan Witmer
 
 Permission is hereby granted, free of charge, to any person obtaining
 a copy of this software and associated documentation files (the

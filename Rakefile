@@ -18,3 +18,6 @@ Bones {
   version  RackStreamingProxy::VERSION
   ignore_file  '.gitignore'
 }
+
+depend_on "rack", :version => "~> 1.0.1"
+depend_on "servolux", :version => "~> 0.8.1"
