@@ -4,48 +4,56 @@ class Rack::StreamingProxy
 
     attr_reader :status, :headers
 
-    def initialize(env, uri)
+    def initialize(request, uri)
       uri = URI.parse(uri)
-      proxy_headers = {
-          "Accept" => env["HTTP_ACCEPT"],
-          "User-Agent" => env["HTTP_USER_AGENT"]
-      }
-      if env["HTTP_ACCEPT_ENCODING"]
-        proxy_headers["Accept-Encoding"] = env["HTTP_ACCEPT_ENCODING"]
+
+      method = request.request_method.downcase
+      method[0..0] = method[0..0].upcase
+
+      proxy_request = Net::HTTP.const_get(method).new("#{uri.path}#{"?" if uri.query}#{uri.query}")
+
+      if proxy_request.request_body_permitted? and request.body
+        proxy_request.body_stream = request.body
+        proxy_request.content_length = request.content_length
+        proxy_request.content_type = request.content_type
       end
+
+      %w(Accept Accept-Encoding Accept-Charset
+        X-Requested-With Referer User-Agent Cookie).each do |header|
+        key = "HTTP_#{header.upcase.gsub('-', '_')}"
+        proxy_request[header] = request.env[key] if request.env[key]
+      end
+      proxy_request["X-Forwarded-For"] =
+        (request.env["X-Forwarded-For"].to_s.split(/, +/) + [request.env["REMOTE_ADDR"]]).join(", ")
 
       @piper = Servolux::Piper.new 'r', :timeout => 30
 
       @piper.child do
         Net::HTTP.start(uri.host, uri.port) do |http|
-          http.request_get(uri.request_uri, proxy_headers) do |response|
-            # at this point the headers and status are available, but
-            # the body has not yet been read. start reading it
-            # and putting it in the parent's pipe.
-            @piper.puts [response.code.to_i, response.to_hash]
+          http.request(proxy_request) do |response|
+            # at this point the headers and status are available, but the body
+            # has not yet been read. start reading it and putting it in the parent's pipe.
+            response_headers = {}
+            response.each_header {|k,v| response_headers[k] = v}
+            @piper.puts [response.code.to_i, response_headers]
+
             response.read_body do |chunk|
               @piper.puts chunk
             end
             @piper.puts :done
           end
         end
+
         exit!
       end
 
       @piper.parent do
         # wait for the status and headers to come back from the child
         @status, @headers = @piper.gets
-
-        # headers from net/http response are arrays, clean 'em up for rack
-        @headers.each do |key, value|
-          @headers[key] = value.join if value.respond_to?(:join)
-        end
-
         @headers = HeaderHash.new(@headers)
       end
     end
 
-    # thanks to Rack::Chunked...
     def each
       chunked = @headers["Transfer-Encoding"] == "chunked"
       term = "\r\n"

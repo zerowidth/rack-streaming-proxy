@@ -8,22 +8,29 @@ Streaming proxy for Rack, the rainbows to Rack::Proxy's unicorn.
 
 == FEATURES/PROBLEMS:
 
-Provides a (mostly) transparent streaming proxy to be used as rack
-middleware. Handles chunked encoding, and will stream the response
-body for an upstream request back to the client.
+Provides a transparent streaming proxy to be used as rack middleware.
+
+* Streams the response from the downstream server to minimize memory usage
+* Handles chunked encoding if used
+* Proxies GET/PUT/POST/DELETE, XHR, and cookies
 
 Use this when you need to have the response streamed back to the client,
 for example when handling large file requests that could be proxied
 directly but need to be authenticated against the rest of your middleware
 stack.
 
-Please note that this will not work well with EventMachine. EM buffers
-the entire rack response before sending it to the client. When testing,
-try mongrel (via rackup) or passenger, rather than the EM-based thin. See
+Note that this will not work well with EventMachine. EM buffers the entire
+rack response before sending it to the client. When testing, try
+mongrel (via rackup) or passenger, rather than the EM-based thin. See
 http://groups.google.com/group/thin-ruby/browse_thread/thread/4762f8f851b965f6
 for more discussion.
 
 I've included a simple streamer app for testing and development.
+
+Thanks to:
+
+* Tom Lea (cwninja) for Rack::Proxy (http://gist.github.com/207938)
+* Tim Pease for servolux
 
 == SYNOPSIS:
 
