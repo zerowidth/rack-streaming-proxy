@@ -1,6 +1,8 @@
 module Rack
   class StreamingProxy
 
+    class Error < StandardError; end
+
     # :stopdoc:
     VERSION = '1.0.0'
     LIBPATH = ::File.expand_path(::File.dirname(__FILE__)) + ::File::SEPARATOR
@@ -68,6 +70,12 @@ module Rack
       return app.call(env) unless uri = request_uri.call(req)
       proxy = ProxyRequest.new(req, uri)
       [proxy.status, proxy.headers, proxy]
+    rescue => e
+      msg = "Proxy error when proxying to #{uri}: #{e.class}: #{e.message}"
+      env["rack.errors"].puts msg
+      env["rack.errors"].puts e.backtrace.map { |l| "\t" + l }
+      env["rack.errors"].flush
+      raise Error, msg
     end
 
     protected
