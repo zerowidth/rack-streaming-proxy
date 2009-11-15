@@ -11,13 +11,13 @@ task :default => 'spec:specdoc'
 task 'gem:release' => 'spec:specdoc'
 
 Bones {
-  name  'rack-streaming_proxy'
+  name  'rack-streaming-proxy'
   authors  'Nathan Witmer'
   email  'nwitmer@gmail.com'
-  url  'http://github.com/aniero/rack-streaming_proxy'
-  version  RackStreamingProxy::VERSION
+  url  'http://github.com/aniero/rack-streaming-proxy'
+  version  Rack::StreamingProxy::VERSION
   ignore_file  '.gitignore'
+  depend_on "rack", :version => "~> 1.0.1"
+  depend_on "servolux", :version => "~> 0.8.1"
 }
 
-depend_on "rack", :version => "~> 1.0.1"
-depend_on "servolux", :version => "~> 0.8.1"

@@ -86,7 +86,10 @@ module Rack
 
 end
 
-Rack::StreamingProxy.require_all_libs_relative_to(__FILE__)
+require "rack"
 require "servolux"
 require "net/http"
 require "uri"
+
+Rack::StreamingProxy.require_all_libs_relative_to(__FILE__)
+

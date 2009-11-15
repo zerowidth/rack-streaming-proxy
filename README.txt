@@ -1,6 +1,6 @@
-rack-streaming_proxy
+rack-streaming-proxy
     by Nathan Witmer <nwitmer@gmail.com>
-    http://github.com/aniero/rack-streaming_proxy
+    http://github.com/aniero/rack-streaming-proxy
 
 == DESCRIPTION:
 
@@ -30,7 +30,7 @@ I've included a simple streamer app for testing and development.
 Thanks to:
 
 * Tom Lea (cwninja) for Rack::Proxy (http://gist.github.com/207938)
-* Tim Pease for servolux
+* Tim Pease for bones, servolux, &c
 
 == SYNOPSIS:
 
@@ -50,7 +50,7 @@ Thanks to:
 
 == INSTALL:
 
-* sudo gem install rack-streaming_proxy --source http://gemcutter.org
+* sudo gem install rack-streaming-proxy --source http://gemcutter.org
 
 == LICENSE:
 
