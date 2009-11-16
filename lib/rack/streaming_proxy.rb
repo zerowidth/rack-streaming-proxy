@@ -6,7 +6,7 @@ module Rack
     # :stopdoc:
     VERSION = '1.0.0'
     LIBPATH = ::File.expand_path(::File.dirname(__FILE__)) + ::File::SEPARATOR
-    PATH = ::File.dirname(LIBPATH) + ::File::SEPARATOR
+    PATH = ::File.expand_path(::File.join(::File.dirname(__FILE__), "..", "..")) + ::File::SEPARATOR
     # :startdoc:
 
     # Returns the version string for the library.
@@ -68,14 +68,16 @@ module Rack
     def call(env)
       req = Rack::Request.new(env)
       return app.call(env) unless uri = request_uri.call(req)
-      proxy = ProxyRequest.new(req, uri)
-      [proxy.status, proxy.headers, proxy]
-    rescue => e
-      msg = "Proxy error when proxying to #{uri}: #{e.class}: #{e.message}"
-      env["rack.errors"].puts msg
-      env["rack.errors"].puts e.backtrace.map { |l| "\t" + l }
-      env["rack.errors"].flush
-      raise Error, msg
+      begin # only want to catch proxy errors, not app errors
+        proxy = ProxyRequest.new(req, uri)
+        [proxy.status, proxy.headers, proxy]
+      rescue => e
+        msg = "Proxy error when proxying to #{uri}: #{e.class}: #{e.message}"
+        env["rack.errors"].puts msg
+        env["rack.errors"].puts e.backtrace.map { |l| "\t" + l }
+        env["rack.errors"].flush
+        raise Error, msg
+      end
     end
 
     protected

@@ -35,7 +35,8 @@ class Rack::StreamingProxy
             # has not yet been read. start reading it and putting it in the parent's pipe.
             response_headers = {}
             response.each_header {|k,v| response_headers[k] = v}
-            @piper.puts [response.code.to_i, response_headers]
+            @piper.puts response.code.to_i
+            @piper.puts response_headers
 
             response.read_body do |chunk|
               @piper.puts chunk
@@ -43,22 +44,26 @@ class Rack::StreamingProxy
             @piper.puts :done
           end
         end
-
-        exit!
       end
 
       @piper.parent do
         # wait for the status and headers to come back from the child
-        @status, @headers = @piper.gets
-        @headers = HeaderHash.new(@headers)
+        @status = read_from_child
+        @headers = HeaderHash.new(read_from_child)
       end
+    rescue => e
+      @piper.parent { raise }
+      @piper.child { @piper.puts e }
+    ensure
+      # child needs to exit, always.
+      @piper.child { exit!(0) }
     end
 
     def each
       chunked = @headers["Transfer-Encoding"] == "chunked"
       term = "\r\n"
 
-      while chunk = @piper.gets
+      while chunk = read_from_child
         break if chunk == :done
         if chunked
           size = bytesize(chunk)
@@ -70,6 +75,15 @@ class Rack::StreamingProxy
       end
 
       yield ["0", term, "", term].join if chunked
+    end
+
+
+    protected
+
+    def read_from_child
+      val = @piper.gets
+      raise val if val.kind_of?(Exception)
+      val
     end
 
   end

@@ -19,5 +19,9 @@ Bones {
   ignore_file  '.gitignore'
   depend_on "rack", :version => "~> 1.0.1"
   depend_on "servolux", :version => "~> 0.8.1"
+  depend_on "rack-test", :version => "~> 0.5.1", :development => true
+  spec {
+    opts ["--colour",  "--loadby mtime", "--reverse", "--diff unified"]
+  }
 }
 
