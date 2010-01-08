@@ -143,5 +143,17 @@ describe Rack::StreamingProxy do
     lambda { get "/not_proxied/boom" }.should raise_error(RuntimeError, /app error/)
   end
 
+  it "preserves cookies" do
+    set_cookie "foo"
+    post "/env"
+    YAML.load(last_response.body)["HTTP_COOKIE"].should == "foo"
+  end
+
+  it "preserves authentication info" do
+    basic_authorize "admin", "secret"
+    post "/env"
+    YAML.load(last_response.body)["HTTP_AUTHORIZATION"].should == "Basic YWRtaW46c2VjcmV0\n"
+  end
+
 end
 
