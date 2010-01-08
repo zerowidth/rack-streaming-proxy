@@ -54,11 +54,15 @@ class Rack::StreamingProxy
         @headers = HeaderHash.new(read_from_child)
       end
     rescue => e
-      @piper.parent { raise }
-      @piper.child { @piper.puts e }
+      if @piper
+        @piper.parent { raise }
+        @piper.child { @piper.puts e }
+      else
+        raise
+      end
     ensure
       # child needs to exit, always.
-      @piper.child { exit!(0) }
+      @piper.child { exit!(0) } if @piper
     end
 
     def each
