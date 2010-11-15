@@ -67,7 +67,12 @@ module Rack
 
     def call(env)
       req = Rack::Request.new(env)
-      return app.call(env) unless uri = request_uri.call(req)
+      unless uri = request_uri.call(req)
+        code, headers, body = app.call(env)
+        unless req.path_info = headers['X-Accel-Redirect'] and uri = request_uri.call(req)
+          return [code, headers, body]
+        end
+      end
       begin # only want to catch proxy errors, not app errors
         proxy = ProxyRequest.new(req, uri)
         [proxy.status, proxy.headers, proxy]
