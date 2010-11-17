@@ -69,8 +69,13 @@ module Rack
       req = Rack::Request.new(env)
       unless uri = request_uri.call(req)
         code, headers, body = app.call(env)
-        unless req.path_info = headers['X-Accel-Redirect'] and uri = request_uri.call(req)
+        unless headers['X-Accel-Redirect']
           return [code, headers, body]
+        else
+          proxy_env = env.merge("PATH_INFO" => headers['X-Accel-Redirect'])
+          unless uri = request_uri.call(Rack::Request.new(proxy_env))
+            raise "Could not proxy #{headers['X-Accel-Redirect']}: Path does not map to any uri"
+          end
         end
       end
       begin # only want to catch proxy errors, not app errors
