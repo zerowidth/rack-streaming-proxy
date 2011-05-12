@@ -9,7 +9,7 @@ class Rack::StreamingProxy
 
       method = request.request_method.downcase
       method[0..0] = method[0..0].upcase
-
+      
       proxy_request = Net::HTTP.const_get(method).new("#{uri.path}#{"?" if uri.query}#{uri.query}")
 
       if proxy_request.request_body_permitted? and request.body
@@ -31,7 +31,9 @@ class Rack::StreamingProxy
       @piper = Servolux::Piper.new 'r', :timeout => 30
 
       @piper.child do
-        Net::HTTP.start(uri.host, uri.port) do |http|
+        http_req = Net::HTTP.new(uri.host, uri.port)
+        http_req.use_ssl = uri.is_a?(URI::HTTPS)
+        http_req.start do |http|
           http.request(proxy_request) do |response|
             # at this point the headers and status are available, but the body
             # has not yet been read. start reading it and putting it in the parent's pipe.

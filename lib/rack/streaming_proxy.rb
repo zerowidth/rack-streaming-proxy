@@ -100,7 +100,7 @@ end
 
 require "rack"
 require "servolux"
-require "net/http"
+require "net/https"
 require "uri"
 
 Rack::StreamingProxy.require_all_libs_relative_to(__FILE__)
