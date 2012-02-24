@@ -159,5 +159,10 @@ describe Rack::StreamingProxy do
     YAML::load(last_response.body)["HTTP_AUTHORIZATION"].should == "Basic YWRtaW46c2VjcmV0"
   end
 
+  it "preserves arbitrary headers" do
+    get "/env", {}, "HTTP_X_FOOHEADER" => "Bar"
+    YAML::load(last_response.body)["HTTP_X_FOOHEADER"].should == "Bar"
+  end
+
 end
 
