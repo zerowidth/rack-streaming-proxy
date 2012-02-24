@@ -11,6 +11,10 @@ describe Rack::StreamingProxy do
     @app ||= Rack::Builder.new do
       use Rack::Lint
       use Rack::StreamingProxy do |req|
+        # STDERR.puts "== incoming request env =="
+        # STDERR.puts req.env
+        # STDERR.puts "=^ incoming request env ^="
+        # STDERR.puts
         unless req.path.start_with?("/not_proxied")
           url = "http://localhost:#{APP_PORT}#{req.path}"
           url << "?#{req.query_string}" unless req.query_string.empty?
