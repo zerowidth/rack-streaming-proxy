@@ -153,7 +153,7 @@ describe Rack::StreamingProxy do
   it "preserves authentication info" do
     basic_authorize "admin", "secret"
     post "/env"
-    YAML::load(last_response.body)["HTTP_AUTHORIZATION"].should == "Basic YWRtaW46c2VjcmV0\n"
+    YAML::load(last_response.body)["HTTP_AUTHORIZATION"].should == "Basic YWRtaW46c2VjcmV0"
   end
 
 end
