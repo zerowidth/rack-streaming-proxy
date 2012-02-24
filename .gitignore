@@ -16,3 +16,14 @@ announcement.txt
 coverage
 doc
 pkg
+*~
+\#*\#
+/.emacs.desktop
+/.emacs.desktop.lock
+.elc
+auto-save-list
+tramp
+.\#*
+.*.sw[a-z]
+*.un~
+Session.vim
