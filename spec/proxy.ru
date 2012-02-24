@@ -6,4 +6,4 @@ use Rack::Lint
 use Rack::StreamingProxy do |req|
   "http://localhost:4321#{req.path}"
 end
-run lambda { |env| [200, {}, "should never get here..."]}
+run lambda { |env| [200, {}, ["should never get here..."]]}

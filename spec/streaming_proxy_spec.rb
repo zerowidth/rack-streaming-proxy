@@ -19,7 +19,7 @@ describe Rack::StreamingProxy do
       end
       run lambda { |env|
         raise "app error" if env["PATH_INFO"] =~ /boom/
-        [200, {"Content-Type" => "text/plain"}, "not proxied"]
+        [200, {"Content-Type" => "text/plain"}, ["not proxied"]]
       }
     end
   end
