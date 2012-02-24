@@ -106,8 +106,7 @@ describe Rack::StreamingProxy do
       last_response.should be_ok
       times = last_response.body.split("\n").map {|l| l.to_i}
       unless (times.last - times.first) >= 2
-        violated "expected receive time of first chunk to be at least " +
-          "two seconds before the last chunk"
+        fail "expected receive time of first chunk to be at least two seconds before the last chunk, but the times were: #{times.join(', ')}"
       end
     end
 
