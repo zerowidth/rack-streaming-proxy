@@ -1,3 +1,4 @@
+require 'yaml'
 require File.join(File.dirname(__FILE__), %w[spec_helper])
 
 describe Rack::StreamingProxy do
@@ -146,13 +147,13 @@ describe Rack::StreamingProxy do
   it "preserves cookies" do
     set_cookie "foo"
     post "/env"
-    YAML.load(last_response.body)["HTTP_COOKIE"].should == "foo"
+    YAML::load(last_response.body)["HTTP_COOKIE"].should == "foo"
   end
 
   it "preserves authentication info" do
     basic_authorize "admin", "secret"
     post "/env"
-    YAML.load(last_response.body)["HTTP_AUTHORIZATION"].should == "Basic YWRtaW46c2VjcmV0\n"
+    YAML::load(last_response.body)["HTTP_AUTHORIZATION"].should == "Basic YWRtaW46c2VjcmV0\n"
   end
 
 end
