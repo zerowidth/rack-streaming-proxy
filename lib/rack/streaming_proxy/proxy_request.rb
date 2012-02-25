@@ -101,7 +101,8 @@ class Rack::StreamingProxy
       current_headers.each { |name, value|
         fixed_name = reconstructed_header_name_for name
         # @logger.info "Setting proxy header #{name} to #{value} using #{fixed_name}"
-        proxy_request[fixed_name] = value }
+        proxy_request[fixed_name] = value unless fixed_name.downcase == "host"
+			}
     end
 
     def reconstructed_header_name_for(rackified_header_name)
