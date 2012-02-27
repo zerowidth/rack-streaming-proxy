@@ -1,3 +1,5 @@
+require 'logger'
+
 class Rack::StreamingProxy
   class ProxyRequest
     include Rack::Utils
@@ -5,6 +7,7 @@ class Rack::StreamingProxy
     attr_reader :status, :headers
 
     def initialize(request, uri)
+			@logger = Logger.new(STDOUT)
       uri = URI.parse(uri)
 
       method = request.request_method.downcase
@@ -18,23 +21,22 @@ class Rack::StreamingProxy
         proxy_request.content_type = request.content_type if request.content_type
       end
 
-      %w(Accept Accept-Encoding Accept-Charset
-        X-Requested-With Referer User-Agent Cookie
-        Authorization
-        ).each do |header|
-        key = "HTTP_#{header.upcase.gsub('-', '_')}"
-        proxy_request[header] = request.env[key] if request.env[key]
-      end
+      copy_headers_to_proxy_request(request, proxy_request)
       proxy_request["X-Forwarded-For"] =
         (request.env["X-Forwarded-For"].to_s.split(/, +/) + [request.env["REMOTE_ADDR"]]).join(", ")
 
+			@logger.info "[Rack::StreamingProxy] Proxy Request Headers:"
+			proxy_request.each_header {|h,v| @logger.info "[Rack::StreamingProxy] #{h} = #{v}"}
       @piper = Servolux::Piper.new 'r', :timeout => 30
 
       @piper.child do
         http_req = Net::HTTP.new(uri.host, uri.port)
         http_req.use_ssl = uri.is_a?(URI::HTTPS)
         http_req.start do |http|
+					@logger.info "[Rack::StreamingProxy] Starting request to #{http.inspect}"
+					
           http.request(proxy_request) do |response|
+						@logger.info "[Rack::StreamingProxy] got response: #{response.inspect}"
             # at this point the headers and status are available, but the body
             # has not yet been read. start reading it and putting it in the parent's pipe.
             response_headers = {}
@@ -94,5 +96,19 @@ class Rack::StreamingProxy
       val
     end
 
+    def copy_headers_to_proxy_request(request, proxy_request)
+      current_headers = request.env.reject {|env_key, env_val| !(env_key.match /^HTTP_/) }
+      current_headers.each { |name, value|
+        fixed_name = reconstructed_header_name_for name
+        # @logger.info "Setting proxy header #{name} to #{value} using #{fixed_name}"
+        proxy_request[fixed_name] = value unless fixed_name.downcase == "host"
+			}
+    end
+
+    def reconstructed_header_name_for(rackified_header_name)
+      rackified_header_name.sub(/^HTTP_/, "").gsub("_", "-")
+    end
+
   end
+
 end

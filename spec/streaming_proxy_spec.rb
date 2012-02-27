@@ -1,3 +1,4 @@
+require 'yaml'
 require File.join(File.dirname(__FILE__), %w[spec_helper])
 
 describe Rack::StreamingProxy do
@@ -10,6 +11,10 @@ describe Rack::StreamingProxy do
     @app ||= Rack::Builder.new do
       use Rack::Lint
       use Rack::StreamingProxy do |req|
+        # STDERR.puts "== incoming request env =="
+        # STDERR.puts req.env
+        # STDERR.puts "=^ incoming request env ^="
+        # STDERR.puts
         unless req.path.start_with?("/not_proxied")
           url = "http://localhost:#{APP_PORT}#{req.path}"
           url << "?#{req.query_string}" unless req.query_string.empty?
@@ -19,7 +24,7 @@ describe Rack::StreamingProxy do
       end
       run lambda { |env|
         raise "app error" if env["PATH_INFO"] =~ /boom/
-        [200, {"Content-Type" => "text/plain"}, "not proxied"]
+        [200, {"Content-Type" => "text/plain"}, ["not proxied"]]
       }
     end
   end
@@ -105,8 +110,7 @@ describe Rack::StreamingProxy do
       last_response.should be_ok
       times = last_response.body.split("\n").map {|l| l.to_i}
       unless (times.last - times.first) >= 2
-        violated "expected receive time of first chunk to be at least " +
-          "two seconds before the last chunk"
+        fail "expected receive time of first chunk to be at least two seconds before the last chunk, but the times were: #{times.join(', ')}"
       end
     end
 
@@ -146,13 +150,18 @@ describe Rack::StreamingProxy do
   it "preserves cookies" do
     set_cookie "foo"
     post "/env"
-    YAML.load(last_response.body)["HTTP_COOKIE"].should == "foo"
+    YAML::load(last_response.body)["HTTP_COOKIE"].should == "foo"
   end
 
   it "preserves authentication info" do
     basic_authorize "admin", "secret"
     post "/env"
-    YAML.load(last_response.body)["HTTP_AUTHORIZATION"].should == "Basic YWRtaW46c2VjcmV0\n"
+    YAML::load(last_response.body)["HTTP_AUTHORIZATION"].should == "Basic YWRtaW46c2VjcmV0"
+  end
+
+  it "preserves arbitrary headers" do
+    get "/env", {}, "HTTP_X_FOOHEADER" => "Bar"
+    YAML::load(last_response.body)["HTTP_X_FOOHEADER"].should == "Bar"
   end
 
 end

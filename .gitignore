@@ -16,3 +16,17 @@ announcement.txt
 coverage
 doc
 pkg
+*~
+\#*\#
+/.emacs.desktop
+/.emacs.desktop.lock
+.elc
+auto-save-list
+tramp
+.\#*
+.*.sw[a-z]
+*.un~
+Session.vim
+
+# http://yehudakatz.com/2010/12/16/clarifying-the-roles-of-the-gemspec-and-gemfile/
+Gemfile.lock
