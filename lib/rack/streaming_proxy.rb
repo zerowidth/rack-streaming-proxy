@@ -4,7 +4,7 @@ module Rack
     class Error < StandardError; end
 
     # :stopdoc:
-    VERSION = '1.0.3'
+    VERSION = '1.0.4'
     LIBPATH = ::File.expand_path(::File.dirname(__FILE__)) + ::File::SEPARATOR
     PATH = ::File.expand_path(::File.join(::File.dirname(__FILE__), "..", "..")) + ::File::SEPARATOR
     # :startdoc:
@@ -44,6 +44,12 @@ module Rack
         Dir.glob(search_me).sort.each {|rb| require rb}
     end
 
+    # Class instance variable for the logger.
+    # Note that all instances of the Rack::StreamingProxy class will share this logger.
+    class << self
+      attr_accessor :logger
+    end
+
     # The block provided to the initializer is given a Rack::Request
     # and should return:
     #
@@ -79,7 +85,7 @@ module Rack
         end
       end
       begin # only want to catch proxy errors, not app errors
-        proxy = ProxyRequest.new(req, uri)
+        proxy = ProxyRequest.new(req, uri, self.class.logger)
         [proxy.status, proxy.headers, proxy]
       rescue => e
         msg = "Proxy error when proxying to #{uri}: #{e.class}: #{e.message}"
@@ -102,6 +108,5 @@ require "rack"
 require "servolux"
 require "net/https"
 require "uri"
-
+require "rack/streaming_proxy/railtie" if defined? ::Rails::Railtie
 Rack::StreamingProxy.require_all_libs_relative_to(__FILE__)
-
