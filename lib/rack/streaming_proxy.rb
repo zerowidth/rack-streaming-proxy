@@ -4,7 +4,7 @@ module Rack
     class Error < StandardError; end
 
     # :stopdoc:
-    VERSION = '1.0.4'
+    VERSION = '1.0.5'
     LIBPATH = ::File.expand_path(::File.dirname(__FILE__)) + ::File::SEPARATOR
     PATH = ::File.expand_path(::File.join(::File.dirname(__FILE__), "..", "..")) + ::File::SEPARATOR
     # :startdoc:
