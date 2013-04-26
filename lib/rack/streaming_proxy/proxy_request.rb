@@ -37,10 +37,11 @@ class Rack::StreamingProxy
       @piper = Servolux::Piper.new 'r', :timeout => 30
 
       @piper.child do
-        http_req = Net::HTTP.new(uri.host, uri.port)
-        http_req.use_ssl = uri.is_a?(URI::HTTPS)
+        begin
+          http_req = Net::HTTP.new(uri.host, uri.port)
+          http_req.use_ssl = uri.is_a?(URI::HTTPS)
 
-        http_req.start do |http|
+          http_req.start do |http|
           @logger.debug "[Rack::StreamingProxy] Starting request to #{http.inspect}"
 
           # Retry the request up to MAX_503_RETRIES times if a 503 is experienced.
@@ -75,12 +76,23 @@ class Rack::StreamingProxy
 
         end
 
+        ensure
+          @piper.close
+
+          # child needs to exit, always.
+          exit!(0)
+        end
       end
 
       @piper.parent do
-        # wait for the status and headers to come back from the child
-        @status = read_from_child
-        @headers = HeaderHash.new(read_from_child)
+        begin
+          # wait for the status and headers to come back from the child
+          @status = read_from_child
+          @headers = HeaderHash.new(read_from_child)
+        ensure
+          # parent needs to wait for the child, or it results in the child process becoming defunct, resulting in a thread leak!
+          @piper.wait
+        end
       end
 
     rescue => e
@@ -90,9 +102,7 @@ class Rack::StreamingProxy
       else
         raise
       end
-    ensure
-      # child needs to exit, always.
-      @piper.child { exit!(0) } if @piper
+
     end
 
     def each
