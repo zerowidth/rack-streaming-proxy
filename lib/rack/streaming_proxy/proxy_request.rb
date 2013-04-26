@@ -78,7 +78,6 @@ class Rack::StreamingProxy
 
         ensure
           @piper.close
-
           # child needs to exit, always.
           exit!(0)
         end
@@ -90,7 +89,7 @@ class Rack::StreamingProxy
           @status = read_from_child
           @headers = HeaderHash.new(read_from_child)
         ensure
-          # parent needs to wait for the child, or it results in the child process becoming defunct, resulting in a thread leak!
+          # parent needs to wait for the child, or it results in the child process becoming defunct, resulting in zombie processes!
           @piper.wait
         end
       end
