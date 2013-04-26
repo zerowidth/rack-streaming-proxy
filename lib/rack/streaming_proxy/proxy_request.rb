@@ -31,28 +31,40 @@ class Rack::StreamingProxy
       @piper = Servolux::Piper.new 'r', :timeout => 30
 
       @piper.child do
-        Net::HTTP.start(uri.host, uri.port) do |http|
-          http.request(proxy_request) do |response|
-            # at this point the headers and status are available, but the body
-            # has not yet been read. start reading it and putting it in the parent's pipe.
-            response_headers = {}
-            response.each_header {|k,v| response_headers[k] = v}
-            @piper.puts response.code.to_i
-            @piper.puts response_headers
+        begin
+          Net::HTTP.start(uri.host, uri.port) do |http|
+            http.request(proxy_request) do |response|
+              # at this point the headers and status are available, but the body
+              # has not yet been read. start reading it and putting it in the parent's pipe.
+              response_headers = {}
+              response.each_header {|k,v| response_headers[k] = v}
+              @piper.puts response.code.to_i
+              @piper.puts response_headers
 
-            response.read_body do |chunk|
-              @piper.puts chunk
+              response.read_body do |chunk|
+                @piper.puts chunk
+              end
+              @piper.puts :done
             end
-            @piper.puts :done
           end
+        ensure
+          @piper.close
+          # child needs to exit, always.
+          exit!(0)
         end
       end
 
       @piper.parent do
-        # wait for the status and headers to come back from the child
-        @status = read_from_child
-        @headers = HeaderHash.new(read_from_child)
+        begin
+          # wait for the status and headers to come back from the child
+          @status = read_from_child
+          @headers = HeaderHash.new(read_from_child)
+        ensure
+          # parent needs to wait for the child, or it results in the child process becoming defunct, resulting in zombie processes!
+          @piper.wait
+        end
       end
+
     rescue => e
       if @piper
         @piper.parent { raise }
@@ -60,9 +72,6 @@ class Rack::StreamingProxy
       else
         raise
       end
-    ensure
-      # child needs to exit, always.
-      @piper.child { exit!(0) } if @piper
     end
 
     def each
