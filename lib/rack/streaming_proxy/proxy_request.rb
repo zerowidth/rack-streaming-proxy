@@ -3,8 +3,6 @@ require 'logger'
 class Rack::StreamingProxy
   class ProxyRequest
 
-    class HTTPServiceUnavailable < RuntimeError; end
-
     MAX_503_RETRIES = 5
 
     include Rack::Utils
@@ -32,8 +30,8 @@ class Rack::StreamingProxy
       proxy_request["X-Forwarded-For"] =
         (request.env["X-Forwarded-For"].to_s.split(/, +/) + [request.env["REMOTE_ADDR"]]).join(", ")
 
-#      @logger.debug "[Rack::StreamingProxy] Proxy Request Headers:"
-#      proxy_request.each_header {|h,v| @logger.debug "[Rack::StreamingProxy] #{h} = #{v}"}
+      #@logger.debug "[Rack::StreamingProxy] Proxy Request Headers:"
+      #proxy_request.each_header {|h,v| @logger.debug "[Rack::StreamingProxy] #{h} = #{v}"}
       @piper = Servolux::Piper.new 'r', :timeout => 30
 
       @piper.child do
@@ -42,98 +40,105 @@ class Rack::StreamingProxy
           http_req.use_ssl = uri.is_a?(URI::HTTPS)
 
           http_req.start do |http|
-          @logger.info "[Rack::StreamingProxy] Starting request to #{http.inspect}"
+            @logger.info "[Rack::StreamingProxy] Starting request to #{http.inspect}"
 
-          # Retry the request up to MAX_503_RETRIES times if a 503 is experienced.
-          # This is because Heroku sometimes gives spurious 503 errors that resolve themselves quickly.
-          # do...while loop as suggested by Matz: http://blade.nagaokaut.ac.jp/cgi-bin/scat.rb/ruby/ruby-core/6745
-          retries = 1
-          success = false
-          loop do
-            http.request(proxy_request) do |response|
-              # at this point the headers and status are available, but the body has not yet been read.
+            # Retry the request up to MAX_503_RETRIES times if a 503 is experienced.
+            # This is because Heroku sometimes gives spurious 503 errors that resolve themselves quickly.
+            # do...while loop as suggested by Matz: http://blade.nagaokaut.ac.jp/cgi-bin/scat.rb/ruby/ruby-core/6745
+            retries = 1
+            stop = false
+            loop do
+              http.request(proxy_request) do |response|
+                # at this point the headers and status are available, but the body has not yet been read.
 
-              @logger.info "[Rack::StreamingProxy] Got response: #{response.inspect}"
+                @logger.info "[Rack::StreamingProxy] Got response: #{response.inspect}"
 
-              if response.code.to_i == 503
-                if retries <= MAX_503_RETRIES
-                  @logger.info "[Rack::StreamingProxy] Got 503, retrying (Retry ##{retries})"
-                  sleep 1
-                  retries += 1
-                  next
-                else
-                  raise HTTPServiceUnavailable
+                if response.class == Net::HTTPServiceUnavailable
+                  if retries <= MAX_503_RETRIES
+                    @logger.info "[Rack::StreamingProxy] Got 503, retrying (Retry ##{retries})"
+                    sleep 1
+                    retries += 1
+                    next
+                  end
                 end
+
+                # Start reading the body and putting it in the parent's pipe.
+                puts_from_child(response)
+                stop = true
               end
 
-              # Start reading the body and putting it in the parent's pipe.
-              puts_from_child(response)
-              success = true
+              break if stop
             end
-
-            break if success
           end
-
-        end
 
         ensure
           @logger.info "[Rack::StreamingProxy] Child process #{Process.pid} closing connection."
           @piper.close
-          # child needs to exit, always.
 
           @logger.info "[Rack::StreamingProxy] Child process #{Process.pid} exiting."
-          exit!(0)
+          exit!(0) # child needs to exit, always.
         end
       end
 
       @piper.parent do
         @logger.info "[Rack::StreamingProxy] Parent process #{Process.pid} forked a child process #{@piper.pid}."
         # wait for the status and headers to come back from the child
+
         @status = read_from_child
+        @logger.info "[Rack::StreamingProxy] Child returned Status = #{@status}."
+
+        @body_permitted = read_from_child
+        @logger.info "[Rack::StreamingProxy] Reponse has body? = #{@body_permitted}."
+
         @headers = HeaderHash.new(read_from_child)
+
+        self.finish if !@body_permitted
       end
 
     rescue => e
-      if @piper
-        @piper.parent { raise }
-        @piper.child { @piper.puts e }
-      else
-        raise
-      end
-
+      @logger.info "[Rack::StreamingProxy] Parent process #{Process.pid} rescued #{e.class}."
+      self.finish
+      raise
     end
 
     def each
-      chunked = @headers["Transfer-Encoding"] == "chunked"
-      term = "\r\n"
+      if @body_permitted
+        chunked = @headers["Transfer-Encoding"] == "chunked"
+        term = "\r\n"
 
-      while chunk = read_from_child
-        break if chunk == :done
-        if chunked
-          size = bytesize(chunk)
-          next if size == 0
-          yield [size.to_s(16), term, chunk, term].join
-        else
-          yield chunk
+        while chunk = read_from_child
+          break if chunk == :done
+          if chunked
+            size = bytesize(chunk)
+            next if size == 0
+            yield [size.to_s(16), term, chunk, term].join
+          else
+            yield chunk
+          end
         end
-      end
 
+        self.finish
+
+        yield ["0", term, "", term].join if chunked
+      end
+    end
+
+  protected
+
+    def finish
       # parent needs to wait for the child, or it results in the child process becoming defunct, resulting in zombie processes!
       # Use a flag of 1 so it waits for this child only, and not any other children.
       # http://ruby-doc.org/core-1.9.3/Process.html#method-c-wait
       @logger.info "[Rack::StreamingProxy] Parent process #{Process.pid} waiting for child process #{@piper.pid} to exit."
       @piper.wait
-
-      yield ["0", term, "", term].join if chunked
     end
-
-  protected
 
     def puts_from_child(response)
       response_headers = {}
       response.each_header {|k,v| response_headers[k] = v}
 
       @piper.puts response.code.to_i
+      @piper.puts response.class.body_permitted?
       @piper.puts response_headers
 
       response.read_body do |chunk|
