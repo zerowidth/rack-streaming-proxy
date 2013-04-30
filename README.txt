@@ -1,6 +1,6 @@
 rack-streaming-proxy
     by Nathan Witmer <nwitmer@gmail.com>
-    http://github.com/aniero/rack-streaming-proxy
+    http://github.com/zerowidth/rack-streaming-proxy
 
 == DESCRIPTION:
 
