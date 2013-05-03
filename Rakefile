@@ -14,7 +14,7 @@ Bones {
   name  'rack-streaming-proxy'
   authors  'Nathan Witmer'
   email  'nwitmer@gmail.com'
-  url  'http://github.com/aniero/rack-streaming-proxy'
+  url  'http://github.com/zerowidth/rack-streaming-proxy'
   version  Rack::StreamingProxy::VERSION
   ignore_file  '.gitignore'
   depend_on "rack", :version => ">= 1.0"
