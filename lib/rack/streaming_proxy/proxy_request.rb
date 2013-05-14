@@ -2,6 +2,8 @@ require 'logger'
 
 class Rack::StreamingProxy::ProxyRequest
 
+  class Error < RuntimeError; end
+
   MAX_503_RETRIES = 5
 
   include Rack::Utils
@@ -39,7 +41,7 @@ class Rack::StreamingProxy::ProxyRequest
         http_req.use_ssl = uri.is_a?(URI::HTTPS)
 
         http_req.start do |http|
-          @logger.info "[Rack::StreamingProxy] Starting request to #{http.inspect}"
+          @logger.info "[Rack::StreamingProxy] Child starting request to #{http.inspect}"
 
           # Retry the request up to MAX_503_RETRIES times if a 503 is experienced.
           # This is because Heroku sometimes gives spurious 503 errors that resolve themselves quickly.
@@ -50,11 +52,11 @@ class Rack::StreamingProxy::ProxyRequest
             http.request(proxy_request) do |response|
               # at this point the headers and status are available, but the body has not yet been read.
 
-              @logger.info "[Rack::StreamingProxy] Got response: #{response.inspect}"
+              @logger.info "[Rack::StreamingProxy] Child got response: #{response.inspect}"
 
               if response.class == Net::HTTPServiceUnavailable
                 if retries <= MAX_503_RETRIES
-                  @logger.info "[Rack::StreamingProxy] Got 503, retrying (Retry ##{retries})"
+                  @logger.info "[Rack::StreamingProxy] Child got 503, retrying (Retry ##{retries})"
                   sleep 1
                   retries += 1
                   next
@@ -83,23 +85,29 @@ class Rack::StreamingProxy::ProxyRequest
       @logger.info "[Rack::StreamingProxy] Parent process #{Process.pid} forked a child process #{@piper.pid}."
       # wait for the status and headers to come back from the child
 
-      @status = read_from_child
-      @logger.info "[Rack::StreamingProxy] Child returned Status = #{@status}."
+      if @status = read_from_child
+        @logger.info "[Rack::StreamingProxy] Parent received: Status = #{@status}."
 
-      @body_permitted = read_from_child
-      @logger.info "[Rack::StreamingProxy] Reponse has body? = #{@body_permitted}."
+        @body_permitted = read_from_child
+        @logger.info "[Rack::StreamingProxy] Parent received: Reponse has body? = #{@body_permitted}."
 
-      @headers = HeaderHash.new(read_from_child)
+        @headers = HeaderHash.new(read_from_child)
 
-      self.finish if !@body_permitted
+        self.finish if !@body_permitted
+      else
+        @logger.info "[Rack::StreamingProxy] Parent received unexpected nil status!"
+        self.finish
+        raise Error
+      end
     end
 
-  rescue RuntimeError => e
-    @logger.info "[Rack::StreamingProxy] Parent process #{Process.pid} rescued #{e.class}."
-    self.finish
-    raise
+  #rescue RuntimeError => e
+  #  @logger.info "[Rack::StreamingProxy] Parent process #{Process.pid} rescued #{e.class}."
+  #  self.finish
+  #  raise
   end
 
+  # This method is called by Rack itself, to iterate over the proxied contents.
   def each
     if @body_permitted
       chunked = @headers["Transfer-Encoding"] == "chunked"
@@ -134,20 +142,21 @@ protected
     response_headers = {}
     response.each_header {|k,v| response_headers[k] = v}
 
+    if response.code.to_i
+      @logger.info "[Rack::StreamingProxy] Child process #{Process.pid} returning Status = #{response.code.to_i}."
+    else
+      @logger.info "[Rack::StreamingProxy] Child process #{Process.pid} unexpectedly has a Nil Status!"
+    end
+
     @piper.puts response.code.to_i
     @piper.puts response.class.body_permitted?
     @piper.puts response_headers
-
-    response.read_body do |chunk|
-      @piper.puts chunk
-    end
+    response.read_body { |chunk| @piper.puts chunk }
     @piper.puts :done
   end
 
   def read_from_child
-    val = @piper.gets
-    raise val if val.kind_of?(Exception)
-    val
+    @piper.gets
   end
 
   def copy_headers_to_proxy_request(request, proxy_request)
@@ -162,6 +171,5 @@ protected
   def reconstructed_header_name_for(rackified_header_name)
     rackified_header_name.sub(/^HTTP_/, "").gsub("_", "-")
   end
-
 
 end

@@ -3,7 +3,7 @@ class Rack::StreamingProxy
   class Error < RuntimeError; end
 
   # :stopdoc:
-  VERSION = '1.1.1'
+  VERSION = '1.1.2'
   LIBPATH = ::File.expand_path(::File.dirname(__FILE__)) + ::File::SEPARATOR
   PATH = ::File.expand_path(::File.join(::File.dirname(__FILE__), "..", "..")) + ::File::SEPARATOR
   # :startdoc:
@@ -72,6 +72,7 @@ class Rack::StreamingProxy
 
   def call(env)
     req = Rack::Request.new(env)
+
     unless uri = request_uri.call(req)
       code, headers, body = app.call(env)
       unless headers['X-Accel-Redirect']
@@ -83,19 +84,20 @@ class Rack::StreamingProxy
         end
       end
     end
-    begin # only want to catch proxy errors, not app errors
-      proxy = ProxyRequest.new(req, uri, self.class.logger)
-      [proxy.status, proxy.headers, proxy]
-    rescue RuntimeError => e
-      msg = "Proxy error when proxying to #{uri}: #{e.class}: #{e.message}"
-      env["rack.errors"].puts msg
-      env["rack.errors"].puts e.backtrace.map { |l| "\t" + l }
-      env["rack.errors"].flush
-      raise Error, msg
-    end
+
+    #begin
+    proxy = ProxyRequest.new(req, uri, self.class.logger)
+    [proxy.status, proxy.headers, proxy]
+    #rescue RuntimeError => e # only want to catch proxy errors, not app errors
+    #  msg = "Proxy error when proxying to #{uri}: #{e.class}: #{e.message}"
+    #  env["rack.errors"].puts msg
+    #  env["rack.errors"].puts e.backtrace.map { |l| "\t" + l }
+    #  env["rack.errors"].flush
+    #  raise Error, msg
+    #end
   end
 
-  protected
+protected
 
   attr_reader :request_uri, :app
 
