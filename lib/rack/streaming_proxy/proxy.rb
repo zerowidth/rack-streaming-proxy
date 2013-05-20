@@ -34,18 +34,7 @@ class Rack::StreamingProxy::Proxy
 
   def call(env)
     req = Rack::Request.new(env)
-
-    unless uri = request_uri.call(req)
-      code, headers, body = app.call(env)
-      unless headers['X-Accel-Redirect']
-        return [code, headers, body]
-      else
-        proxy_env = env.merge('PATH_INFO' => headers['X-Accel-Redirect'])
-        unless uri = request_uri.call(Rack::Request.new(proxy_env))
-          raise "Could not proxy #{headers['X-Accel-Redirect']}: Path does not map to any uri"
-        end
-      end
-    end
+    return app.call(env) unless uri = request_uri.call(req)
 
     #begin
     proxy = Rack::StreamingProxy::Request.new(req, uri, self.class.logger)
