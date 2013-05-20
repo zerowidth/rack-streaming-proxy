@@ -1,41 +1,57 @@
-# -*- encoding: utf-8 -*-
+# coding: utf-8
+lib = File.expand_path('../lib', __FILE__)
+$LOAD_PATH.unshift(lib) unless $LOAD_PATH.include?(lib)
+require 'rack/streaming_proxy/version'
 
-Gem::Specification.new do |s|
-  s.name = "rack-streaming-proxy"
-  s.version = "1.1.2"
+Gem::Specification.new do |spec|
+  spec.name          = 'rack-streaming-proxy'
+  spec.version       = Rack::StreamingProxy::VERSION
+  spec.authors       = ['Fred Ngo', 'Nathan Witmer']
+  spec.email         = ['fredngo@gmail.com', 'nwitmer@gmail.com']
+  spec.description   = %q{Streaming proxy for Rack, the rainbows to Rack::Proxy's unicorn.}
+  spec.summary       = %q{Streaming proxy for Rack, the rainbows to Rack::Proxy's unicorn.}
+  spec.homepage      = 'http://github.com/fredngo/rack-streaming-proxy'
+  spec.license       = 'MIT'
 
-  s.required_rubygems_version = Gem::Requirement.new(">= 0") if s.respond_to? :required_rubygems_version=
-  s.authors = ["Nathan Witmer"]
-  s.date = "2012-06-22"
-  s.description = "Streaming proxy for Rack, the rainbows to Rack::Proxy's unicorn."
-  s.email = "nwitmer@gmail.com"
-  s.extra_rdoc_files = ["History.txt", "README.txt"]
-  s.files = [".gitignore", ".rspec", ".rvmrc", "Gemfile", "History.txt", "README.txt", "Rakefile", "dev/proxy.ru", "dev/streamer.ru", "lib/rack/streaming_proxy.rb", "lib/rack/streaming_proxy/proxy_request.rb", "lib/rack/streaming_proxy/railtie.rb", "rack-streaming-proxy.gemspec", "spec/app.ru", "spec/proxy.ru", "spec/spec_helper.rb", "spec/streaming_proxy_spec.rb"]
-  s.homepage = "http://github.com/fredngo/rack-streaming-proxy"
-  s.rdoc_options = ["--main", "README.txt"]
-  s.require_paths = ["lib"]
-  s.rubyforge_project = "rack-streaming-proxy"
-  s.rubygems_version = "1.8.24"
-  s.summary = "Streaming proxy for Rack, the rainbows to Rack::Proxy's unicorn."
+  spec.files         = `git ls-files`.split($/)
+  spec.executables   = spec.files.grep(%r{^bin/}) { |f| File.basename(f) }
+  spec.test_files    = spec.files.grep(%r{^(test|spec|features)/})
+  spec.require_paths = ['lib']
 
-  if s.respond_to? :specification_version then
-    s.specification_version = 3
+  spec.add_development_dependency 'bundler',  '>= 1.3'
+  spec.add_development_dependency 'rake',     '>= 10.0'
 
-    if Gem::Version.new(Gem::VERSION) >= Gem::Version.new('1.2.0') then
-      s.add_runtime_dependency(%q<rack>, [">= 1.0"])
-      s.add_runtime_dependency(%q<servolux>, ["~> 0.10.0"])
-      s.add_development_dependency(%q<rack-test>, ["~> 0.5.1"])
-      s.add_development_dependency(%q<bones>, [">= 3.8.0"])
-    else
-      s.add_dependency(%q<rack>, [">= 1.0"])
-      s.add_dependency(%q<servolux>, ["~> 0.10.0"])
-      s.add_dependency(%q<rack-test>, ["~> 0.5.1"])
-      s.add_dependency(%q<bones>, [">= 3.8.0"])
-    end
-  else
-    s.add_dependency(%q<rack>, [">= 1.0"])
-    s.add_dependency(%q<servolux>, ["~> 0.10.0"])
-    s.add_dependency(%q<rack-test>, ["~> 0.5.1"])
-    s.add_dependency(%q<bones>, [">= 3.8.0"])
-  end
+  spec.add_runtime_dependency     'rack',     '>= 1.4'
+  spec.add_runtime_dependency     'servolux', '~> 0.10'
 end
+
+# Old stuff to be removed later
+
+#spec.required_rubygems_version = Gem::Requirement.new(">= 0") if spec.respond_to? :required_rubygems_version=
+#spec.date = "2012-06-22"
+#spec.extra_rdoc_files = ["History.txt", "README.txt"]
+#spec.rdoc_options = ["--main", "README.txt"]
+#spec.rubyforge_project = "rack-streaming-proxy"
+#spec.rubygems_version = "1.8.24"
+#
+#if spec.respond_to? :specification_version then
+#  spec.specification_version = 3
+#
+#  if Gem::Version.new(Gem::VERSION) >= Gem::Version.new('1.2.0') then
+#    spec.add_runtime_dependency(%q<rack>, [">= 1.0"])
+#    spec.add_runtime_dependency(%q<servolux>, ["~> 0.10.0"])
+#    spec.add_development_dependency(%q<rack-test>, ["~> 0.5.1"])
+#    spec.add_development_dependency(%q<bones>, [">= 3.8.0"])
+#  else
+#    spec.add_dependency(%q<rack>, [">= 1.0"])
+#    spec.add_dependency(%q<servolux>, ["~> 0.10.0"])
+#    spec.add_dependency(%q<rack-test>, ["~> 0.5.1"])
+#    spec.add_dependency(%q<bones>, [">= 3.8.0"])
+#  end
+#else
+#  spec.add_dependency(%q<rack>, [">= 1.0"])
+#  spec.add_dependency(%q<servolux>, ["~> 0.10.0"])
+#  spec.add_dependency(%q<rack-test>, ["~> 0.5.1"])
+#  spec.add_dependency(%q<bones>, [">= 3.8.0"])
+#end
+

@@ -1,6 +1,9 @@
 require 'logger'
+require 'servolux'
+require 'net/https'
+require 'uri'
 
-class Rack::StreamingProxy::ProxyRequest
+class Rack::StreamingProxy::Request
 
   class Error < RuntimeError; end
 
@@ -28,10 +31,10 @@ class Rack::StreamingProxy::ProxyRequest
     end
 
     copy_headers_to_proxy_request(request, proxy_request)
-    proxy_request["X-Forwarded-For"] =
-      (request.env["X-Forwarded-For"].to_s.split(/, +/) + [request.env["REMOTE_ADDR"]]).join(", ")
+    proxy_request['X-Forwarded-For'] =
+      (request.env['X-Forwarded-For'].to_s.split(/, +/) + [request.env['REMOTE_ADDR']]).join(', ')
 
-    #@logger.debug "[Rack::StreamingProxy] Proxy Request Headers:"
+    #@logger.debug '[Rack::StreamingProxy] Proxy Request Headers:'
     #proxy_request.each_header {|h,v| @logger.debug "[Rack::StreamingProxy] #{h} = #{v}"}
     @piper = Servolux::Piper.new 'r', timeout: 30
 
@@ -63,8 +66,8 @@ class Rack::StreamingProxy::ProxyRequest
                 end
               end
 
-              # Start reading the body and putting it in the parent's pipe.
-              puts_from_child(response)
+              # Start putting the body in the parent's pipe.
+              write_from_child(response)
               stop = true
             end
 
@@ -96,7 +99,8 @@ class Rack::StreamingProxy::ProxyRequest
         self.finish if !@body_permitted
       else
         @logger.info "[Rack::StreamingProxy] Parent received unexpected nil status!"
-        self.finish
+        #self.finish
+        finish
         raise Error
       end
     end
@@ -110,8 +114,8 @@ class Rack::StreamingProxy::ProxyRequest
   # This method is called by Rack itself, to iterate over the proxied contents.
   def each
     if @body_permitted
-      chunked = @headers["Transfer-Encoding"] == "chunked"
-      term = "\r\n"
+      chunked = @headers['Transfer-Encoding'] == 'chunked'
+      term = '\r\n'
 
       while chunk = read_from_child
         break if chunk == :done
@@ -124,13 +128,14 @@ class Rack::StreamingProxy::ProxyRequest
         end
       end
 
-      self.finish
+      #self.finish
+      finish
 
-      yield ["0", term, "", term].join if chunked
+      yield ['0', term, '', term].join if chunked
     end
   end
 
-protected
+private
 
   def finish
     # parent needs to wait for the child, or it results in the child process becoming defunct, resulting in zombie processes!
@@ -138,7 +143,7 @@ protected
     @piper.wait
   end
 
-  def puts_from_child(response)
+  def write_from_child(response)
     response_headers = {}
     response.each_header {|k,v| response_headers[k] = v}
 
@@ -164,12 +169,12 @@ protected
     current_headers.each { |name, value|
       fixed_name = reconstructed_header_name_for name
       # @logger.debug "Setting proxy header #{name} to #{value} using #{fixed_name}"
-      proxy_request[fixed_name] = value unless fixed_name.downcase == "host"
+      proxy_request[fixed_name] = value unless fixed_name.downcase == 'host'
     }
   end
 
   def reconstructed_header_name_for(rackified_header_name)
-    rackified_header_name.sub(/^HTTP_/, "").gsub("_", "-")
+    rackified_header_name.sub(/^HTTP_/, '').gsub('_', '-')
   end
 
 end
