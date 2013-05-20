@@ -1,47 +1,32 @@
-require 'logger'
-require 'servolux'
-require 'net/https'
 require 'uri'
+require 'net/https'
+require 'servolux'
 
 class Rack::StreamingProxy::Request
+  include Rack::Utils
 
   class Error < RuntimeError; end
 
   MAX_503_RETRIES = 5
 
-  include Rack::Utils
-
   attr_reader :status, :headers
 
-  def initialize(request, uri, logger)
-    @logger = logger ? logger : Logger.new(STDOUT)
-    uri = URI.parse(uri)
+  def initialize(proxy_uri, current_request, logger)
+    @uri           = URI.parse(proxy_uri)
+    @proxy_request = construct_proxy_request(current_request, @uri)
+    @logger        = logger
+    @piper         = Servolux::Piper.new 'r', timeout: 30
+  end
 
-    @logger.info "Proxying to: #{uri.to_s}"
-
-    method = request.request_method.downcase
-    method[0..0] = method[0..0].upcase
-
-    proxy_request = Net::HTTP.const_get(method).new("#{uri.path}#{"?" if uri.query}#{uri.query}")
-
-    if proxy_request.request_body_permitted? and request.body
-      proxy_request.body_stream    = request.body
-      proxy_request.content_length = request.content_length if request.content_length
-      proxy_request.content_type   = request.content_type   if request.content_type
-    end
-
-    copy_headers_to_proxy_request(request, proxy_request)
-    proxy_request['X-Forwarded-For'] =
-      (request.env['X-Forwarded-For'].to_s.split(/, +/) + [request.env['REMOTE_ADDR']]).join(', ')
+  def start
+    @logger.info "Proxying to: #{@uri.to_s}"
 
     #@logger.debug '[Rack::StreamingProxy] Proxy Request Headers:'
-    #proxy_request.each_header {|h,v| @logger.debug "[Rack::StreamingProxy] #{h} = #{v}"}
-    @piper = Servolux::Piper.new 'r', timeout: 30
-
+    #@proxy_request.each_header {|h,v| @logger.debug "[Rack::StreamingProxy] #{h} = #{v}"}
     @piper.child do
       begin
-        http_req = Net::HTTP.new(uri.host, uri.port)
-        http_req.use_ssl = uri.is_a?(URI::HTTPS)
+        http_req = Net::HTTP.new(@uri.host, @uri.port)
+        http_req.use_ssl = @uri.is_a?(URI::HTTPS)
 
         http_req.start do |http|
           @logger.info "[Rack::StreamingProxy] Child starting request to #{http.inspect}"
@@ -52,7 +37,7 @@ class Rack::StreamingProxy::Request
           retries = 1
           stop = false
           loop do
-            http.request(proxy_request) do |response|
+            http.request(@proxy_request) do |response|
               # at this point the headers and status are available, but the body has not yet been read.
 
               @logger.info "[Rack::StreamingProxy] Child got response: #{response.inspect}"
@@ -96,18 +81,20 @@ class Rack::StreamingProxy::Request
 
         @headers = HeaderHash.new(read_from_child)
 
-        self.finish if !@body_permitted
+        # If there is a body, finish_request will be called inside each.
+        finish_request if !@body_permitted
       else
         @logger.info "[Rack::StreamingProxy] Parent received unexpected nil status!"
-        finish
+        finish_request
         raise Error
       end
     end
 
   #rescue RuntimeError => e
   #  @logger.info "[Rack::StreamingProxy] Parent process #{Process.pid} rescued #{e.class}."
-  #  self.finish
+  #  finish_request
   #  raise
+
   end
 
   # This method is called by Rack itself, to iterate over the proxied contents.
@@ -127,7 +114,7 @@ class Rack::StreamingProxy::Request
         end
       end
 
-      finish
+      finish_request
 
       yield ['0', term, '', term].join if chunked
     end
@@ -135,7 +122,7 @@ class Rack::StreamingProxy::Request
 
 private
 
-  def finish
+  def finish_request
     # parent needs to wait for the child, or it results in the child process becoming defunct, resulting in zombie processes!
     @logger.info "[Rack::StreamingProxy] Parent process #{Process.pid} waiting for child process #{@piper.pid} to exit."
     @piper.wait
@@ -162,17 +149,27 @@ private
     @piper.gets
   end
 
-  def copy_headers_to_proxy_request(request, proxy_request)
-    current_headers = request.env.reject {|env_key, env_val| !(env_key.match /^HTTP_/) }
+  def construct_proxy_request(current_request, uri)
+    method = current_request.request_method.downcase
+    method[0..0] = method[0..0].upcase
+
+    proxy_request = Net::HTTP.const_get(method).new("#{uri.path}#{"?" if uri.query}#{uri.query}")
+
+    if proxy_request.request_body_permitted? and current_request.body
+      proxy_request.body_stream    = current_request.body
+      proxy_request.content_length = current_request.content_length if current_request.content_length
+      proxy_request.content_type   = current_request.content_type   if current_request.content_type
+    end
+
+    current_headers = current_request.env.reject {|env_key, env_val| !(env_key.match /^HTTP_/) }
     current_headers.each { |name, value|
-      fixed_name = reconstructed_header_name_for name
+      fixed_name = name.sub(/^HTTP_/, '').gsub('_', '-')
       # @logger.debug "Setting proxy header #{name} to #{value} using #{fixed_name}"
       proxy_request[fixed_name] = value unless fixed_name.downcase == 'host'
     }
-  end
+    proxy_request['X-Forwarded-For'] = (current_request.env['X-Forwarded-For'].to_s.split(/, +/) + [current_request.env['REMOTE_ADDR']]).join(', ')
 
-  def reconstructed_header_name_for(rackified_header_name)
-    rackified_header_name.sub(/^HTTP_/, '').gsub('_', '-')
+    proxy_request
   end
 
 end

@@ -1,4 +1,5 @@
 require 'rack'
+require 'logger'
 require 'rack/streaming_proxy/request'
 
 class Rack::StreamingProxy::Proxy
@@ -28,28 +29,35 @@ class Rack::StreamingProxy::Proxy
   # Most headers, request body, and HTTP method are preserved.
   #
   def initialize(app, &block)
-    @request_uri = block
-    @app         = app
+    @@logger ||= Logger.new(STDOUT)
+
+    @app   = app
+    @block = block
   end
 
   def call(env)
-    req = Rack::Request.new(env)
-    return app.call(env) unless uri = request_uri.call(req)
+    current_request = Rack::Request.new(env)
 
-    #begin
-    proxy = Rack::StreamingProxy::Request.new(req, uri, self.class.logger)
-    [proxy.status, proxy.headers, proxy]
-    #rescue RuntimeError => e # only want to catch proxy errors, not app errors
-    #  msg = "Proxy error when proxying to #{uri}: #{e.class}: #{e.message}"
-    #  env['rack.errors'].puts msg
-    #  env['rack.errors'].puts e.backtrace.map { |l| "\t" + l }
-    #  env['rack.errors'].flush
-    #  raise Error, msg
-    #end
+    # Decide whether this request should be proxied.
+    if proxy_uri = @block.call(current_request)
+
+      #begin
+      proxied_request = Rack::StreamingProxy::Request.new(proxy_uri, current_request, self.class.logger)
+      proxied_request.start
+      [proxied_request.status, proxied_request.headers, proxied_request]
+
+      #rescue RuntimeError => e # only want to catch proxy errors, not app errors
+      #  msg = "Proxy error when proxying to #{uri}: #{e.class}: #{e.message}"
+      #  env['rack.errors'].puts msg
+      #  env['rack.errors'].puts e.backtrace.map { |l| "\t" + l }
+      #  env['rack.errors'].flush
+      #  raise Error, msg
+      #end
+
+    # Continue down the middleware stack if the request is not to be proxied.
+    else
+      @app.call(env)
+    end
   end
-
-private
-
-  attr_reader :request_uri, :app
 
 end
