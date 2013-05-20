@@ -25,9 +25,9 @@ class Rack::StreamingProxy::Request
     proxy_request = Net::HTTP.const_get(method).new("#{uri.path}#{"?" if uri.query}#{uri.query}")
 
     if proxy_request.request_body_permitted? and request.body
-      proxy_request.body_stream = request.body
+      proxy_request.body_stream    = request.body
       proxy_request.content_length = request.content_length if request.content_length
-      proxy_request.content_type = request.content_type if request.content_type
+      proxy_request.content_type   = request.content_type   if request.content_type
     end
 
     copy_headers_to_proxy_request(request, proxy_request)
@@ -99,7 +99,6 @@ class Rack::StreamingProxy::Request
         self.finish if !@body_permitted
       else
         @logger.info "[Rack::StreamingProxy] Parent received unexpected nil status!"
-        #self.finish
         finish
         raise Error
       end
@@ -128,7 +127,6 @@ class Rack::StreamingProxy::Request
         end
       end
 
-      #self.finish
       finish
 
       yield ['0', term, '', term].join if chunked

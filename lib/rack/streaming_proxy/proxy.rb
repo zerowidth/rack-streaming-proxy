@@ -29,7 +29,7 @@ class Rack::StreamingProxy::Proxy
   #
   def initialize(app, &block)
     @request_uri = block
-    @app = app
+    @app         = app
   end
 
   def call(env)
