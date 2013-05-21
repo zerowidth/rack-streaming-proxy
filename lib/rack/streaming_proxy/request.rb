@@ -13,28 +13,24 @@ class Rack::StreamingProxy::Request
 
   attr_reader :status, :headers
 
-  def initialize(proxy_uri, current_request, logger)
-    # No retries are performed be default.
+  def initialize(proxy_uri, current_request)
+    # No retries are performed by default.
     self.class.num_5xx_retries ||= 0
 
-    @uri           = URI.parse(proxy_uri)
-    @proxy_request = construct_proxy_request(current_request, @uri)
-    @logger        = logger
-    @piper         = Servolux::Piper.new 'r', timeout: 30
+    @proxy_uri     = URI.parse(proxy_uri)
+    @proxy_request = construct_proxy_request(current_request, @proxy_uri)
   end
 
   def start
-    @logger.info "Proxying to: #{@uri.to_s}"
+    @piper = Servolux::Piper.new 'r', timeout: 30
 
-    #@logger.debug '[Rack::StreamingProxy] Proxy Request Headers:'
-    #@proxy_request.each_header {|h,v| @logger.debug "[Rack::StreamingProxy] #{h} = #{v}"}
     @piper.child do
       begin
-        http_req = Net::HTTP.new(@uri.host, @uri.port)
-        http_req.use_ssl = @uri.is_a?(URI::HTTPS)
+        http_req = Net::HTTP.new(@proxy_uri.host, @proxy_uri.port)
+        http_req.use_ssl = @proxy_uri.is_a?(URI::HTTPS)
 
         http_req.start do |http|
-          @logger.info "[Rack::StreamingProxy] Child starting request to #{http.inspect}"
+          log :debug, "Child starting request to #{http.inspect}"
 
           # Retry the request up to self.class.num_5xx_retries times if a 5xx is experienced.
           # This is because Heroku sometimes gives spurious 500/503 errors that resolve themselves quickly.
@@ -45,13 +41,13 @@ class Rack::StreamingProxy::Request
             http.request(@proxy_request) do |response|
               # at this point the headers and status are available, but the body has not yet been read.
 
-              @logger.info "[Rack::StreamingProxy] Child got response: #{response.inspect}"
+              log :debug, "Child got response: #{response.inspect}"
 
               #if [Net::HTTPServiceUnavailable, Net::HTTPInternalServerError].include? response.class
 
               if response.class <= Net::HTTPServerError
                 if retries <= self.class.num_5xx_retries
-                  @logger.info "[Rack::StreamingProxy] Child got 5xx, retrying (Retry ##{retries})"
+                  log :warn, "Child got 5xx, retrying (Retry ##{retries})"
                   sleep 1
                   retries += 1
                   next
@@ -68,37 +64,37 @@ class Rack::StreamingProxy::Request
         end
 
       ensure
-        @logger.info "[Rack::StreamingProxy] Child process #{Process.pid} closing connection."
+        log :debug, "Child process #{Process.pid} closing connection."
         @piper.close
 
-        @logger.info "[Rack::StreamingProxy] Child process #{Process.pid} exiting."
+        log :debug, "Child process #{Process.pid} exiting."
         exit!(0) # child needs to exit, always.
       end
     end
 
     @piper.parent do
-      @logger.info "[Rack::StreamingProxy] Parent process #{Process.pid} forked a child process #{@piper.pid}."
+      log :debug, "Parent process #{Process.pid} forked a child process #{@piper.pid}."
       # wait for the status and headers to come back from the child
 
       if @status = read_from_child
-        @logger.info "[Rack::StreamingProxy] Parent received: Status = #{@status}."
+        log :debug, "Parent received: Status = #{@status}."
 
         @body_permitted = read_from_child
-        @logger.info "[Rack::StreamingProxy] Parent received: Reponse has body? = #{@body_permitted}."
+        log :debug, "Parent received: Reponse has body? = #{@body_permitted}."
 
         @headers = HeaderHash.new(read_from_child)
 
         # If there is a body, finish_request will be called inside each.
         finish_request if !@body_permitted
       else
-        @logger.info "[Rack::StreamingProxy] Parent received unexpected nil status!"
+        log :error, "Parent received unexpected nil status!"
         finish_request
         raise Error
       end
     end
 
   #rescue RuntimeError => e
-  #  @logger.info "[Rack::StreamingProxy] Parent process #{Process.pid} rescued #{e.class}."
+  #  log :debug, "Parent process #{Process.pid} rescued #{e.class}."
   #  finish_request
   #  raise
 
@@ -129,9 +125,13 @@ class Rack::StreamingProxy::Request
 
 private
 
+  def log(level, message)
+    Rack::StreamingProxy::Proxy.logger.send level, "[Rack::StreamingProxy] #{message}"
+  end
+
   def finish_request
     # parent needs to wait for the child, or it results in the child process becoming defunct, resulting in zombie processes!
-    @logger.info "[Rack::StreamingProxy] Parent process #{Process.pid} waiting for child process #{@piper.pid} to exit."
+    log :debug, "Parent process #{Process.pid} waiting for child process #{@piper.pid} to exit."
     @piper.wait
   end
 
@@ -140,9 +140,9 @@ private
     response.each_header {|k,v| response_headers[k] = v}
 
     if response.code.to_i
-      @logger.info "[Rack::StreamingProxy] Child process #{Process.pid} returning Status = #{response.code.to_i}."
+      log :debug, "Child process #{Process.pid} returning Status = #{response.code.to_i}."
     else
-      @logger.info "[Rack::StreamingProxy] Child process #{Process.pid} unexpectedly has a Nil Status!"
+      log :error, "Child process #{Process.pid} unexpectedly has a Nil Status!"
     end
 
     @piper.puts response.code.to_i
@@ -168,15 +168,26 @@ private
       proxy_request.content_type   = current_request.content_type   if current_request.content_type
     end
 
-    current_headers = current_request.env.reject {|env_key, env_val| !(env_key.match /^HTTP_/) }
-    current_headers.each { |name, value|
+    log_headers :debug, 'Current Request Headers', current_request.env
+
+    current_headers = current_request.env.reject { |env_key, env_val| !(env_key.match /^HTTP_/) }
+    current_headers.each do |name, value|
       fixed_name = name.sub(/^HTTP_/, '').gsub('_', '-')
-      # @logger.debug "Setting proxy header #{name} to #{value} using #{fixed_name}"
       proxy_request[fixed_name] = value unless fixed_name.downcase == 'host'
-    }
+    end
     proxy_request['X-Forwarded-For'] = (current_request.env['X-Forwarded-For'].to_s.split(/, +/) + [current_request.env['REMOTE_ADDR']]).join(', ')
 
+    log_headers :debug, 'Proxy Request Headers:', proxy_request
+
     proxy_request
+  end
+
+  def log_headers(level, title, headers)
+    log level, "+-------------------------------------------------------------"
+    log level, "| #{title}"
+    log level, "+-------------------------------------------------------------"
+    headers.each { |key, value| log level, "| #{key} = #{value}" }
+    log level, "+-------------------------------------------------------------"
   end
 
 end

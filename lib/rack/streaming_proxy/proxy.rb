@@ -6,9 +6,10 @@ class Rack::StreamingProxy::Proxy
 
   class Error < RuntimeError; end
 
-  # Class instance variable for the logger.
-  # Note that all instances of the Rack::StreamingProxy::Proxy class will share this logger.
   class << self
+
+    # Class instance variable for the logger.
+    # Note that all instances of the Rack::StreamingProxy::Proxy class will share this logger.
     attr_accessor :logger
   end
 
@@ -18,7 +19,7 @@ class Rack::StreamingProxy::Proxy
   #   * nil/false to skip the proxy and continue down the stack
   #   * a complete uri (with query string if applicable) to proxy to
   #
-  # E.g.
+  # Example:
   #
   #   use Rack::StreamingProxy::Proxy do |req|
   #     if req.path.start_with?('/search')
@@ -29,7 +30,6 @@ class Rack::StreamingProxy::Proxy
   # Most headers, request body, and HTTP method are preserved.
   #
   def initialize(app, &block)
-
     # Logs to stdout by default unless configured with another logger via Railtie.
     self.class.logger ||= Logger.new(STDOUT)
 
@@ -42,10 +42,12 @@ class Rack::StreamingProxy::Proxy
 
     # Decide whether this request should be proxied.
     if proxy_uri = @block.call(current_request)
+      self.class.logger.info "Starting proxy request to: #{proxy_uri}"
 
       #begin
-      proxied_request = Rack::StreamingProxy::Request.new(proxy_uri, current_request, self.class.logger)
+      proxied_request = Rack::StreamingProxy::Request.new(proxy_uri, current_request)
       proxied_request.start
+      self.class.logger.info "Finishing proxy request to: #{proxy_uri}"
       [proxied_request.status, proxied_request.headers, proxied_request]
 
       #rescue RuntimeError => e # only want to catch proxy errors, not app errors

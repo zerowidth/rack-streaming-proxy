@@ -63,6 +63,16 @@ Or install it yourself as:
 
     $ gem install rack-streaming-proxy
 
+## Requirements
+
+* Ruby = 1.9.3
+* rack >= 1.4
+* servolux ~> 0.10
+
+These requirements (other than Ruby) will be automatically installed via Bundler.
+
+This gem has not been tried or tested with versions lower than those indicated.
+
 ## Contributing
 
 1. Fork it
