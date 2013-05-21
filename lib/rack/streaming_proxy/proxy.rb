@@ -7,10 +7,11 @@ class Rack::StreamingProxy::Proxy
   class Error < RuntimeError; end
 
   class << self
+    attr_accessor :logger, :num_5xx_retries
 
-    # Class instance variable for the logger.
-    # Note that all instances of the Rack::StreamingProxy::Proxy class will share this logger.
-    attr_accessor :logger
+    def log(level, message)
+      @logger.send level, "[Rack::StreamingProxy] #{message}"
+    end
   end
 
   # The block provided to the initializer is given a Rack::Request
@@ -33,6 +34,9 @@ class Rack::StreamingProxy::Proxy
     # Logs to stdout by default unless configured with another logger via Railtie.
     self.class.logger ||= Logger.new(STDOUT)
 
+    # No retries are performed by default.
+    self.class.num_5xx_retries ||= 0
+
     @app   = app
     @block = block
   end
@@ -42,12 +46,12 @@ class Rack::StreamingProxy::Proxy
 
     # Decide whether this request should be proxied.
     if destination_uri = @block.call(current_request)
-      self.class.logger.info "Starting proxy request to: #{destination_uri}"
+      self.class.log :info, "Starting proxy request to: #{destination_uri}"
 
       #begin
       proxied_request = Rack::StreamingProxy::Request.new(destination_uri, current_request)
       proxied_request.start
-      self.class.logger.info "Finishing proxy request to: #{destination_uri}"
+      self.class.log :info, "Finishing proxy request to: #{destination_uri}"
       [proxied_request.status, proxied_request.headers, proxied_request]
 
       #rescue RuntimeError => e # only want to catch proxy errors, not app errors

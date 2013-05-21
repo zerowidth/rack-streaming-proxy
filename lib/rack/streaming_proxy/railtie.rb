@@ -9,6 +9,6 @@ class Rack::StreamingProxy::Railtie < Rails::Railtie
     Rack::StreamingProxy::Proxy.logger = config.streaming_proxy.logger
 
     # 0 by default, i.e. No retries are performed.
-    Rack::StreamingProxy::Request.num_5xx_retries = config.streaming_proxy.num_5xx_retries
+    Rack::StreamingProxy::Proxy.num_5xx_retries = config.streaming_proxy.num_5xx_retries
   end
 end
