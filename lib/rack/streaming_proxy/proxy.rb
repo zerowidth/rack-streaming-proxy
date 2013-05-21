@@ -1,6 +1,7 @@
 require 'rack'
 require 'logger'
 require 'rack/streaming_proxy/request'
+require 'rack/streaming_proxy/response'
 
 class Rack::StreamingProxy::Proxy
 
@@ -50,9 +51,9 @@ class Rack::StreamingProxy::Proxy
 
       #begin
       proxied_request = Rack::StreamingProxy::Request.new(destination_uri, current_request)
-      proxied_request.start
+      response = proxied_request.start
       self.class.log :info, "Finishing proxy request to: #{destination_uri}"
-      [proxied_request.status, proxied_request.headers, proxied_request]
+      [response.status, response.headers, response]
 
       #rescue RuntimeError => e # only want to catch proxy errors, not app errors
       #  msg = "Proxy error when proxying to #{uri}: #{e.class}: #{e.message}"

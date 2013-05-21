@@ -4,11 +4,8 @@ require 'servolux'
 require 'rack/streaming_proxy/session'
 
 class Rack::StreamingProxy::Request
-  include Rack::Utils # For HeaderHash
 
   class Error < RuntimeError; end
-
-  attr_reader :status, :headers
 
   def initialize(destination_uri, current_request)
     @destination_uri = URI.parse(destination_uri)
@@ -35,22 +32,9 @@ class Rack::StreamingProxy::Request
     @piper.parent do
       Rack::StreamingProxy::Proxy.log :debug, "Parent process #{Process.pid} forked a child process #{@piper.pid}."
 
-      # wait for the status and headers to come back from the child
-      if @status = read_from_child
-        Rack::StreamingProxy::Proxy.log :debug, "Parent received: Status = #{@status}."
-
-        @body_permitted = read_from_child
-        Rack::StreamingProxy::Proxy.log :debug, "Parent received: Reponse has body? = #{@body_permitted}."
-
-        @headers = HeaderHash.new(read_from_child)
-
-        # If there is a body, finish_request will be called inside each.
-        finish_request if !@body_permitted
-      else
-        Rack::StreamingProxy::Proxy.log :error, "Parent received unexpected nil status!"
-        finish_request
-        raise Error
-      end
+      response = Rack::StreamingProxy::Response.new(@piper)
+      response.receive
+      return response
     end
 
   #rescue RuntimeError => e
@@ -60,41 +44,7 @@ class Rack::StreamingProxy::Request
 
   end
 
-  # This method is called by Rack itself, to iterate over the proxied contents.
-  def each
-    if @body_permitted
-      chunked = @headers['Transfer-Encoding'] == 'chunked'
-      term = '\r\n'
-
-      while chunk = read_from_child
-        break if chunk == :done
-        if chunked
-          size = bytesize(chunk)
-          next if size == 0
-          yield [size.to_s(16), term, chunk, term].join
-        else
-          yield chunk
-        end
-      end
-
-      finish_request
-
-      yield ['0', term, '', term].join if chunked
-    end
-  end
-
 private
-
-  def finish_request
-    # parent needs to wait for the child, or it results in the child process becoming defunct, resulting in zombie processes!
-    Rack::StreamingProxy::Proxy.log :debug, "Parent process #{Process.pid} waiting for child process #{@piper.pid} to exit."
-    @piper.wait
-  end
-
-
-  def read_from_child
-    @piper.gets
-  end
 
   def construct_proxy_request(current_request, uri)
     method = current_request.request_method.downcase
