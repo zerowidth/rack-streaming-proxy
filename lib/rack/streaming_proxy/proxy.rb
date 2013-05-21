@@ -29,7 +29,9 @@ class Rack::StreamingProxy::Proxy
   # Most headers, request body, and HTTP method are preserved.
   #
   def initialize(app, &block)
-    @@logger ||= Logger.new(STDOUT)
+
+    # Logs to stdout by default unless configured with another logger via Railtie.
+    self.class.logger ||= Logger.new(STDOUT)
 
     @app   = app
     @block = block

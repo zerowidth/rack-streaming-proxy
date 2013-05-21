@@ -3,15 +3,20 @@ require 'net/https'
 require 'servolux'
 
 class Rack::StreamingProxy::Request
-  include Rack::Utils
+  include Rack::Utils # For HeaderHash
 
   class Error < RuntimeError; end
 
-  MAX_503_RETRIES = 5
+  class << self
+    attr_accessor :num_5xx_retries
+  end
 
   attr_reader :status, :headers
 
   def initialize(proxy_uri, current_request, logger)
+    # No retries are performed be default.
+    self.class.num_5xx_retries ||= 0
+
     @uri           = URI.parse(proxy_uri)
     @proxy_request = construct_proxy_request(current_request, @uri)
     @logger        = logger
@@ -31,8 +36,8 @@ class Rack::StreamingProxy::Request
         http_req.start do |http|
           @logger.info "[Rack::StreamingProxy] Child starting request to #{http.inspect}"
 
-          # Retry the request up to MAX_503_RETRIES times if a 503 is experienced.
-          # This is because Heroku sometimes gives spurious 503 errors that resolve themselves quickly.
+          # Retry the request up to self.class.num_5xx_retries times if a 5xx is experienced.
+          # This is because Heroku sometimes gives spurious 500/503 errors that resolve themselves quickly.
           # do...while loop as suggested by Matz: http://blade.nagaokaut.ac.jp/cgi-bin/scat.rb/ruby/ruby-core/6745
           retries = 1
           stop = false
@@ -42,9 +47,11 @@ class Rack::StreamingProxy::Request
 
               @logger.info "[Rack::StreamingProxy] Child got response: #{response.inspect}"
 
-              if response.class == Net::HTTPServiceUnavailable
-                if retries <= MAX_503_RETRIES
-                  @logger.info "[Rack::StreamingProxy] Child got 503, retrying (Retry ##{retries})"
+              #if [Net::HTTPServiceUnavailable, Net::HTTPInternalServerError].include? response.class
+
+              if response.class <= Net::HTTPServerError
+                if retries <= self.class.num_5xx_retries
+                  @logger.info "[Rack::StreamingProxy] Child got 5xx, retrying (Retry ##{retries})"
                   sleep 1
                   retries += 1
                   next

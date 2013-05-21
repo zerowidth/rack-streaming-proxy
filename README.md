@@ -23,17 +23,17 @@ require 'rack/streaming_proxy'
 
 YourRailsApp::Application.configure do
   config.streaming_proxy.logger = Rails.logger
+  config.streaming_proxy.num_5xx_retries = 5 # 0 by default if not configured
 
   # Will be inserted at the end of the middleware stack by default.
   config.middleware.use Rack::StreamingProxy::Proxy do |request|
 
     # Inside the request block, return the full URI to redirect the request to,
     # or nil/false if the request should continue on down the middleware stack.
-    if request.path.start_with?('/proxy')
-      "http://another_server#{request.path}"
+    if request.path.start_with?('/search')
+      "http://some_other_service/search?#{request.query}"
     end
   end
-
 end
 ```
 
