@@ -41,13 +41,13 @@ class Rack::StreamingProxy::Proxy
     current_request = Rack::Request.new(env)
 
     # Decide whether this request should be proxied.
-    if proxy_uri = @block.call(current_request)
-      self.class.logger.info "Starting proxy request to: #{proxy_uri}"
+    if destination_uri = @block.call(current_request)
+      self.class.logger.info "Starting proxy request to: #{destination_uri}"
 
       #begin
-      proxied_request = Rack::StreamingProxy::Request.new(proxy_uri, current_request)
+      proxied_request = Rack::StreamingProxy::Request.new(destination_uri, current_request)
       proxied_request.start
-      self.class.logger.info "Finishing proxy request to: #{proxy_uri}"
+      self.class.logger.info "Finishing proxy request to: #{destination_uri}"
       [proxied_request.status, proxied_request.headers, proxied_request]
 
       #rescue RuntimeError => e # only want to catch proxy errors, not app errors

@@ -13,12 +13,11 @@ class Rack::StreamingProxy::Request
 
   attr_reader :status, :headers
 
-  def initialize(proxy_uri, current_request)
-    # No retries are performed by default.
-    self.class.num_5xx_retries ||= 0
+  def initialize(destination_uri, current_request)
+    self.class.num_5xx_retries ||= 0 # No retries are performed by default.
 
-    @proxy_uri     = URI.parse(proxy_uri)
-    @proxy_request = construct_proxy_request(current_request, @proxy_uri)
+    @destination_uri = URI.parse(destination_uri)
+    @proxy_request   = construct_proxy_request(current_request, @destination_uri)
   end
 
   def start
@@ -26,11 +25,10 @@ class Rack::StreamingProxy::Request
 
     @piper.child do
       begin
-        http_req = Net::HTTP.new(@proxy_uri.host, @proxy_uri.port)
-        http_req.use_ssl = @proxy_uri.is_a?(URI::HTTPS)
+        proxy_session = construct_proxy_session(@destination_uri)
 
-        http_req.start do |http|
-          log :debug, "Child starting request to #{http.inspect}"
+        proxy_session.start do |session|
+          log :debug, "Child starting request to #{session.inspect}"
 
           # Retry the request up to self.class.num_5xx_retries times if a 5xx is experienced.
           # This is because Heroku sometimes gives spurious 500/503 errors that resolve themselves quickly.
@@ -38,7 +36,7 @@ class Rack::StreamingProxy::Request
           retries = 1
           stop = false
           loop do
-            http.request(@proxy_request) do |response|
+            session.request(@proxy_request) do |response|
               # at this point the headers and status are available, but the body has not yet been read.
 
               log :debug, "Child got response: #{response.inspect}"
@@ -180,6 +178,12 @@ private
     log_headers :debug, 'Proxy Request Headers:', proxy_request
 
     proxy_request
+  end
+
+  def construct_proxy_session(uri)
+    proxy_session = Net::HTTP.new(uri.host, uri.port)
+    proxy_session.use_ssl = uri.is_a?(URI::HTTPS)
+    proxy_session
   end
 
   def log_headers(level, title, headers)
