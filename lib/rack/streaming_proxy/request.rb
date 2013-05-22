@@ -38,9 +38,9 @@ private
 
     log_headers :debug, 'Current Request Headers', current_request.env
 
-    current_headers = current_request.env.reject { |env_key, env_val| !(env_key.match /^HTTP_/) }
-    current_headers.each do |name, value|
-      fixed_name = name.sub(/^HTTP_/, '').gsub('_', '-')
+    current_headers = current_request.env.reject { |key, value| !(key.match /^HTTP_/) }
+    current_headers.each do |key, value|
+      fixed_name = key.sub(/^HTTP_/, '').gsub('_', '-')
       request[fixed_name] = value unless fixed_name.downcase == 'host'
     end
     request['X-Forwarded-For'] = (current_request.env['X-Forwarded-For'].to_s.split(/, +/) + [current_request.env['REMOTE_ADDR']]).join(', ')

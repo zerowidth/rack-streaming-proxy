@@ -16,8 +16,9 @@ class Rack::StreamingProxy::Session
         perform_request
 
       rescue StandardError => e
-        # Rescue from StandardError to help with development and debugging, as otherwise
-        # when exceptions occur the child process doesn't crash the program with a stack trace.
+        # Rescue and dump stacktrace to help with development and debugging, as otherwise
+        # when exceptions occur the child process doesn't crash the running parent process,
+        # and no stack trace is generated.
         Rack::StreamingProxy::Proxy.log :debug, "Child process rescued #{e.class}: #{e.message}"
         e.backtrace.each { |l| Rack::StreamingProxy::Proxy.log :debug, l }
 
@@ -39,7 +40,7 @@ class Rack::StreamingProxy::Session
     end
 
   #rescue RuntimeError => e
-  #  Rack::StreamingProxy::Proxy.log :debug, "Parent process #{Process.pid} rescued #{e.class}."
+  #  Rack::StreamingProxy::Proxy.log :debug, "Parent process #{Process.pid} rescued #{e.class}: #{e.message}"
   #  raise
 
   end

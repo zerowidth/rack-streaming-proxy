@@ -9,13 +9,34 @@ class Rack::StreamingProxy::Proxy
   class Error < RuntimeError; end
 
   class << self
-    attr_accessor :logger, :log_verbosity, :num_retries_on_5xx
+    attr_accessor :logger, :log_verbosity, :num_retries_on_5xx, :raise_on_5xx
+
+    def set_default_configuration
+      # Logs to stdout by default unless configured with another logger via Railtie.
+      @logger ||= Logger.new(STDOUT)
+
+      # At :low verbosity by default -- will not output :debug level messages.
+      # :high verbosity outputs :debug level messages.
+      # This is independent of the Logger's log_level, as set in Rails, for example,
+      # although the Logger's level can override this setting.
+      @log_verbosity ||= :low
+
+      # No retries are performed by default.
+      @num_retries_on_5xx ||= 0
+
+      # If the proxy cannot recover from 5xx's through retries (see num_retries_on_5xx),
+      # then it by default passes through the content from the destination
+      # e.g. the Apache error page. If you want an exception to be raised instead so
+      # you can handle it yourself (i.e. display your own error page), set raise_on_5xx to true.
+      @raise_on_5xx ||= false
+    end
 
     def log(level, message)
-      unless @log_verbosity == :low && level == :debug
-        @logger.send level, "[Rack::StreamingProxy] #{message}"
-      end
+      #puts "log_verbosity = #{@log_verbosity}, num_retries_on_5xx = #{@num_retries_on_5xx}, raise_on_5xx = #{@raise_on_5xx}"
+
+      @logger.send level, "[Rack::StreamingProxy] #{message}" unless log_verbosity == :low && level == :debug
     end
+
   end
 
   # The block provided to the initializer is given a Rack::Request
@@ -35,18 +56,7 @@ class Rack::StreamingProxy::Proxy
   # Most headers, request body, and HTTP method are preserved.
   #
   def initialize(app, &block)
-    # Logs to stdout by default unless configured with another logger via Railtie.
-    self.class.logger ||= Logger.new(STDOUT)
-
-    # At :low verbosity by default -- will not output :debug level messages.
-    # :high verbosity outputs :debug level messages.
-    # This is independent of the Logger's log_level, as set in Rails, for example,
-    # although the Logger's level can override this setting.
-    self.class.log_verbosity ||= :low
-
-    # No retries are performed by default.
-    self.class.num_retries_on_5xx ||= 0
-
+    self.class.set_default_configuration
     @app   = app
     @block = block
   end
