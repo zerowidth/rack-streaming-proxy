@@ -6,8 +6,6 @@ require 'rack/streaming_proxy/response'
 
 class Rack::StreamingProxy::Proxy
 
-  class Error < RuntimeError; end
-
   class << self
     attr_accessor :logger, :log_verbosity, :num_retries_on_5xx, :raise_on_5xx
 
@@ -32,9 +30,9 @@ class Rack::StreamingProxy::Proxy
     end
 
     def log(level, message)
-      #puts "log_verbosity = #{@log_verbosity}, num_retries_on_5xx = #{@num_retries_on_5xx}, raise_on_5xx = #{@raise_on_5xx}"
-
-      @logger.send level, "[Rack::StreamingProxy] #{message}" unless log_verbosity == :low && level == :debug
+      unless log_verbosity == :low && level == :debug
+        @logger.send level, "[Rack::StreamingProxy] #{message}"
+      end
     end
 
   end

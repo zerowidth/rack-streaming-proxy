@@ -1,7 +1,9 @@
 class Rack::StreamingProxy::Response
   include Rack::Utils # For HeaderHash
 
-  class Error < RuntimeError; end
+  class Error           < RuntimeError; end
+  class ConnectionError < Error;        end
+  class HttpServerError < Error;        end
 
   attr_reader :status, :headers
 
@@ -14,18 +16,25 @@ class Rack::StreamingProxy::Response
     if @status = read_from_remote
       Rack::StreamingProxy::Proxy.log :debug, "Parent received: Status = #{@status}."
 
-      @body_permitted = read_from_remote
-      Rack::StreamingProxy::Proxy.log :debug, "Parent received: Reponse has body? = #{@body_permitted}."
+      if Rack::StreamingProxy::Proxy.raise_on_5xx && @status.to_s =~ /^5..$/
+        Rack::StreamingProxy::Proxy.log :error, "Parent received #{@status} status!"
+        finish
+        raise HttpServerError
+      else
+        @body_permitted = read_from_remote
+        Rack::StreamingProxy::Proxy.log :debug, "Parent received: Reponse has body? = #{@body_permitted}."
 
-      @headers = HeaderHash.new(read_from_remote)
+        @headers = HeaderHash.new(read_from_remote)
 
-      # If there is a body, finish will be called inside each.
-      finish if !@body_permitted
+        finish unless @body_permitted # If there is a body, finish will be called inside each.
+      end
+
     else
       Rack::StreamingProxy::Proxy.log :error, "Parent received unexpected nil status!"
       finish
-      raise Error
+      raise ConnectionError
     end
+
   end
 
   # This method is called by Rack itself, to iterate over the proxied contents.

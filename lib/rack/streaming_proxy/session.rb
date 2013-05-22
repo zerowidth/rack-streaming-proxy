@@ -10,42 +10,39 @@ class Rack::StreamingProxy::Session
 
   def start
     @piper = Servolux::Piper.new 'r', timeout: 30
-
-    @piper.child do
-      begin
-        perform_request
-
-      rescue StandardError => e
-        # Rescue and dump stacktrace to help with development and debugging, as otherwise
-        # when exceptions occur the child process doesn't crash the running parent process,
-        # and no stack trace is generated.
-        Rack::StreamingProxy::Proxy.log :debug, "Child process rescued #{e.class}: #{e.message}"
-        e.backtrace.each { |l| Rack::StreamingProxy::Proxy.log :debug, l }
-
-      ensure
-        Rack::StreamingProxy::Proxy.log :debug, "Child process #{Process.pid} closing connection."
-        @piper.close
-
-        Rack::StreamingProxy::Proxy.log :debug, "Child process #{Process.pid} exiting."
-        exit!(0) # child needs to exit, always.
-      end
-    end
-
-    @piper.parent do
-      Rack::StreamingProxy::Proxy.log :debug, "Parent process #{Process.pid} forked a child process #{@piper.pid}."
-
-      response = Rack::StreamingProxy::Response.new(@piper)
-      response.receive
-      return response
-    end
-
-  #rescue RuntimeError => e
-  #  Rack::StreamingProxy::Proxy.log :debug, "Parent process #{Process.pid} rescued #{e.class}: #{e.message}"
-  #  raise
-
+    @piper.child  { child }
+    @piper.parent { parent }
   end
 
 private
+
+  def child
+    begin
+      perform_request
+
+    rescue Exception => e
+      # Rescue all exceptions and dump stacktrace to help with development and debugging, as
+      # otherwise when exceptions occur the child process doesn't crash the parent process,
+      # and no stack trace is generated. Rescuing the full slate of Exceptions for this purpose.
+      Rack::StreamingProxy::Proxy.log :error, "Child process rescued #{e.class}: #{e.message}"
+      e.backtrace.each { |line| Rack::StreamingProxy::Proxy.log :error, line }
+
+    ensure
+      Rack::StreamingProxy::Proxy.log :debug, "Child process #{Process.pid} closing connection."
+      @piper.close
+
+      Rack::StreamingProxy::Proxy.log :debug, "Child process #{Process.pid} exiting."
+      exit!(0) # child needs to exit, always.
+    end
+  end
+
+  def parent
+    Rack::StreamingProxy::Proxy.log :debug, "Parent process #{Process.pid} forked a child process #{@piper.pid}."
+
+    response = Rack::StreamingProxy::Response.new(@piper)
+    response.receive
+    return response
+  end
 
   def perform_request
     http_session = Net::HTTP.new(@request.host, @request.port)
@@ -64,12 +61,12 @@ private
         Rack::StreamingProxy::Proxy.log :debug, "Request #{@request.inspect}"
 
         session.request(@request.http_request) do |response|
-          # at this point the headers and status are available, but the body has not yet been read.
+          # At this point the headers and status are available, but the body has not yet been read.
           Rack::StreamingProxy::Proxy.log :debug, "Child got response: #{response.inspect}"
 
           if response.class <= Net::HTTPServerError # Includes Net::HTTPServiceUnavailable, Net::HTTPInternalServerError
             if retries <= Rack::StreamingProxy::Proxy.num_retries_on_5xx
-              Rack::StreamingProxy::Proxy.log :warn, "Child got 5xx, retrying (Retry ##{retries})"
+              Rack::StreamingProxy::Proxy.log :warn, "Child got #{response.code}, retrying (Retry ##{retries})"
               sleep 1
               retries += 1
               next
@@ -77,8 +74,8 @@ private
           end
           stop = true
 
-          if response.code.to_i
-            Rack::StreamingProxy::Proxy.log :debug, "Child process #{Process.pid} returning Status = #{response.code.to_i}."
+          if response.code
+            Rack::StreamingProxy::Proxy.log :debug, "Child process #{Process.pid} returning Status = #{response.code}."
           else
             Rack::StreamingProxy::Proxy.log :debug, "Child process #{Process.pid} unexpectedly has a Nil Status!"
           end
@@ -93,13 +90,14 @@ private
   end
 
   def write_response(response)
-    @piper.puts response.code.to_i
+    @piper.puts response.code
     @piper.puts response.class.body_permitted?
 
-    # I could potentially use a one-liner here:
+    # Could potentially use a one-liner here:
     # @piper.puts Hash[response.to_hash.map { |key, value| [key, value.join(', ')] } ]
-    # But I think the following three lines are more readable.
+    # But the following three lines seem to be more readable.
     # Watch out: response.to_hash and response.each_header returns in different formats!
+    # to_hash requires the values to be joined with a comma.
     headers = {}
     response.each_header { |key, value| headers[key] = value }
     @piper.puts headers
