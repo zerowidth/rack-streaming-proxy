@@ -53,7 +53,7 @@ private
     http_session.start do |session|
       Rack::StreamingProxy::Proxy.log :debug, "Child starting request to #{session.inspect}"
 
-      # Retry the request up to self.class.num_5xx_retries times if a 5xx is experienced.
+      # Retry the request up to self.class.num_retries_on_5xx times if a 5xx is experienced.
       # This is because some 500/503 errors resolve themselves quickly, might as well give it a chance.
       # do...while loop as suggested by Matz: http://blade.nagaokaut.ac.jp/cgi-bin/scat.rb/ruby/ruby-core/6745
       retries = 1
@@ -67,7 +67,7 @@ private
           Rack::StreamingProxy::Proxy.log :debug, "Child got response: #{response.inspect}"
 
           if response.class <= Net::HTTPServerError # Includes Net::HTTPServiceUnavailable, Net::HTTPInternalServerError
-            if retries <= Rack::StreamingProxy::Proxy.num_5xx_retries
+            if retries <= Rack::StreamingProxy::Proxy.num_retries_on_5xx
               Rack::StreamingProxy::Proxy.log :warn, "Child got 5xx, retrying (Retry ##{retries})"
               sleep 1
               retries += 1

@@ -22,8 +22,9 @@ To use inside a Rails app, add a `config/initializers/streaming_proxy.rb` initia
 require 'rack/streaming_proxy'
 
 YourRailsApp::Application.configure do
-  config.streaming_proxy.logger = Rails.logger
-  config.streaming_proxy.num_5xx_retries = 5 # 0 by default if not configured
+  config.streaming_proxy.logger             = Rails.logger # stdout by default
+  config.streaming_proxy.log_verbosity      = :low         # :low or :high, :low by default
+  config.streaming_proxy.num_retries_on_5xx = 5            # 0 by default
 
   # Will be inserted at the end of the middleware stack by default.
   config.middleware.use Rack::StreamingProxy::Proxy do |request|

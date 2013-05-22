@@ -9,10 +9,12 @@ class Rack::StreamingProxy::Proxy
   class Error < RuntimeError; end
 
   class << self
-    attr_accessor :logger, :num_5xx_retries
+    attr_accessor :logger, :log_verbosity, :num_retries_on_5xx
 
     def log(level, message)
-      @logger.send level, "[Rack::StreamingProxy] #{message}"
+      unless @log_verbosity == :low && level == :debug
+        @logger.send level, "[Rack::StreamingProxy] #{message}"
+      end
     end
   end
 
@@ -36,8 +38,14 @@ class Rack::StreamingProxy::Proxy
     # Logs to stdout by default unless configured with another logger via Railtie.
     self.class.logger ||= Logger.new(STDOUT)
 
+    # At :low verbosity by default -- will not output :debug level messages.
+    # :high verbosity outputs :debug level messages.
+    # This is independent of the Logger's log_level, as set in Rails, for example,
+    # although the Logger's level can override this setting.
+    self.class.log_verbosity ||= :low
+
     # No retries are performed by default.
-    self.class.num_5xx_retries ||= 0
+    self.class.num_retries_on_5xx ||= 0
 
     @app   = app
     @block = block
