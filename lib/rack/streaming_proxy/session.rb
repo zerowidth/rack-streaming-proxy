@@ -1,16 +1,53 @@
 require 'uri'
 require 'net/https'
+require 'servolux'
 
 class Rack::StreamingProxy::Session
 
-  def initialize(destination_uri, piper)
-    @proxy_session = Net::HTTP.new(destination_uri.host, destination_uri.port)
-    @proxy_session.use_ssl = destination_uri.is_a? URI::HTTPS
-    @piper = piper
+  def start(request)
+    @piper = Servolux::Piper.new 'r', timeout: 30
+
+    @piper.child do
+      begin
+        perform_request(request)
+
+      rescue StandardError => e
+        # Rescue from StandardError to help with development and debugging, as otherwise
+        # when exceptions occur the child process doesn't crash the program with a stack trace.
+        Rack::StreamingProxy::Proxy.log :debug, "Child process rescued #{e.class}: #{e.message}"
+        e.backtrace.each { |l| Rack::StreamingProxy::Proxy.log :debug, l }
+
+      ensure
+        Rack::StreamingProxy::Proxy.log :debug, "Child process #{Process.pid} closing connection."
+        @piper.close
+
+        Rack::StreamingProxy::Proxy.log :debug, "Child process #{Process.pid} exiting."
+        exit!(0) # child needs to exit, always.
+      end
+    end
+
+    @piper.parent do
+      Rack::StreamingProxy::Proxy.log :debug, "Parent process #{Process.pid} forked a child process #{@piper.pid}."
+
+      response = Rack::StreamingProxy::Response.new(@piper)
+      response.receive
+      return response
+    end
+
+  #rescue RuntimeError => e
+  #  Rack::StreamingProxy::Proxy.log :debug, "Parent process #{Process.pid} rescued #{e.class}."
+  #  finish_request
+  #  raise
+
   end
 
-  def start(proxy_request)
-    @proxy_session.start do |session|
+private
+
+  def perform_request(request)
+    http_session = Net::HTTP.new(request.destination_uri.host, request.destination_uri.port)
+    http_session.use_ssl = request.destination_uri.is_a? URI::HTTPS
+
+    http_session.start do |session|
       Rack::StreamingProxy::Proxy.log :debug, "Child starting request to #{session.inspect}"
 
       # Retry the request up to self.class.num_5xx_retries times if a 5xx is experienced.
@@ -19,7 +56,10 @@ class Rack::StreamingProxy::Session
       retries = 1
       stop = false
       loop do
-        session.request(proxy_request) do |response|
+        Rack::StreamingProxy::Proxy.log :debug, "Session #{session.inspect}"
+        Rack::StreamingProxy::Proxy.log :debug, "Request #{request.inspect}"
+
+        session.request(request.proxy_request) do |response|
           # at this point the headers and status are available, but the body has not yet been read.
 
           Rack::StreamingProxy::Proxy.log :debug, "Child got response: #{response.inspect}"
@@ -42,8 +82,6 @@ class Rack::StreamingProxy::Session
       end
     end
   end
-
-private
 
   def write_response(response)
     response_headers = {}

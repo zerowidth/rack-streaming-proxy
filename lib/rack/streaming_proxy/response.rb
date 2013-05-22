@@ -1,6 +1,8 @@
 class Rack::StreamingProxy::Response
   include Rack::Utils # For HeaderHash
 
+  class Error < RuntimeError; end
+
   attr_reader :status, :headers
 
   def initialize(piper)
@@ -51,8 +53,9 @@ class Rack::StreamingProxy::Response
 
 private
 
+  # parent needs to wait for the child, or it results in the child process becoming defunct, resulting in zombie processes!
+  # This is very important. See: http://siliconisland.ca/2013/04/26/beware-of-the-zombie-process-apocalypse/
   def finish_request
-    # parent needs to wait for the child, or it results in the child process becoming defunct, resulting in zombie processes!
     Rack::StreamingProxy::Proxy.log :debug, "Parent process #{Process.pid} waiting for child process #{@piper.pid} to exit."
     @piper.wait
   end
