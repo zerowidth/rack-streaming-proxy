@@ -3,11 +3,23 @@ require 'net/https'
 
 class Rack::StreamingProxy::Request
 
-  attr_reader :destination_uri, :proxy_request
+  attr_reader :http_request
 
   def initialize(destination_uri, current_request)
     @destination_uri = URI.parse(destination_uri)
-    @proxy_request   = translate_request(current_request, @destination_uri)
+    @http_request    = translate_request(current_request, @destination_uri)
+  end
+
+  def host
+    @destination_uri.host
+  end
+
+  def port
+    @destination_uri.port
+  end
+
+  def use_ssl?
+    @destination_uri.is_a? URI::HTTPS
   end
 
 private

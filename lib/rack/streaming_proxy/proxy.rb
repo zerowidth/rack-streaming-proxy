@@ -51,9 +51,9 @@ class Rack::StreamingProxy::Proxy
       self.class.log :info, "Starting proxy request to: #{destination_uri}"
 
       #begin
-      session = Rack::StreamingProxy::Session.new
       request = Rack::StreamingProxy::Request.new(destination_uri, current_request)
-      response = session.start(request)
+      session = Rack::StreamingProxy::Session.new(request)
+      response = session.start
       self.class.log :info, "Finishing proxy request to: #{destination_uri}"
       [response.status, response.headers, response]
 

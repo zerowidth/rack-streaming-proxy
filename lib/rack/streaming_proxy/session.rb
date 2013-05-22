@@ -4,12 +4,16 @@ require 'servolux'
 
 class Rack::StreamingProxy::Session
 
-  def start(request)
+  def initialize(request)
+    @request = request
+  end
+
+  def start
     @piper = Servolux::Piper.new 'r', timeout: 30
 
     @piper.child do
       begin
-        perform_request(request)
+        perform_request
 
       rescue StandardError => e
         # Rescue from StandardError to help with development and debugging, as otherwise
@@ -36,32 +40,30 @@ class Rack::StreamingProxy::Session
 
   #rescue RuntimeError => e
   #  Rack::StreamingProxy::Proxy.log :debug, "Parent process #{Process.pid} rescued #{e.class}."
-  #  finish_request
   #  raise
 
   end
 
 private
 
-  def perform_request(request)
-    http_session = Net::HTTP.new(request.destination_uri.host, request.destination_uri.port)
-    http_session.use_ssl = request.destination_uri.is_a? URI::HTTPS
+  def perform_request
+    http_session = Net::HTTP.new(@request.host, @request.port)
+    http_session.use_ssl = @request.use_ssl?
 
     http_session.start do |session|
       Rack::StreamingProxy::Proxy.log :debug, "Child starting request to #{session.inspect}"
 
       # Retry the request up to self.class.num_5xx_retries times if a 5xx is experienced.
-      # This is because Heroku sometimes gives spurious 500/503 errors that resolve themselves quickly.
+      # This is because some 500/503 errors resolve themselves quickly, might as well give it a chance.
       # do...while loop as suggested by Matz: http://blade.nagaokaut.ac.jp/cgi-bin/scat.rb/ruby/ruby-core/6745
       retries = 1
       stop = false
       loop do
         Rack::StreamingProxy::Proxy.log :debug, "Session #{session.inspect}"
-        Rack::StreamingProxy::Proxy.log :debug, "Request #{request.inspect}"
+        Rack::StreamingProxy::Proxy.log :debug, "Request #{@request.inspect}"
 
-        session.request(request.proxy_request) do |response|
+        session.request(@request.http_request) do |response|
           # at this point the headers and status are available, but the body has not yet been read.
-
           Rack::StreamingProxy::Proxy.log :debug, "Child got response: #{response.inspect}"
 
           if response.class <= Net::HTTPServerError # Includes Net::HTTPServiceUnavailable, Net::HTTPInternalServerError
@@ -72,10 +74,16 @@ private
               next
             end
           end
-
-          # Start putting the body in the parent's pipe.
-          write_response(response)
           stop = true
+
+          if response.code.to_i
+            Rack::StreamingProxy::Proxy.log :debug, "Child process #{Process.pid} returning Status = #{response.code.to_i}."
+          else
+            Rack::StreamingProxy::Proxy.log :debug, "Child process #{Process.pid} unexpectedly has a Nil Status!"
+          end
+
+          # Put the response in the parent's pipe.
+          write_response(response)
         end
 
         break if stop
@@ -84,18 +92,17 @@ private
   end
 
   def write_response(response)
-    response_headers = {}
-    response.each_header { |key, value| response_headers[key] = value }
-
-    if response.code.to_i
-      Rack::StreamingProxy::Proxy.log :debug, "Child process #{Process.pid} returning Status = #{response.code.to_i}."
-    else
-      Rack::StreamingProxy::Proxy.log :debug, "Child process #{Process.pid} unexpectedly has a Nil Status!"
-    end
-
     @piper.puts response.code.to_i
     @piper.puts response.class.body_permitted?
-    @piper.puts response_headers
+
+    # I could potentially use a one-liner here:
+    # @piper.puts Hash[response.to_hash.map { |key, value| [key, value.join(', ')] } ]
+    # But I think the following three lines are more readable.
+    # Watch out: response.to_hash and response.each_header returns in different formats!
+    headers = {}
+    response.each_header { |key, value| headers[key] = value }
+    @piper.puts headers
+
     response.read_body { |chunk| @piper.puts chunk }
     @piper.puts :done
   end
