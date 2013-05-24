@@ -66,25 +66,29 @@ class Rack::StreamingProxy::Proxy
     if destination_uri = @block.call(current_request)
       self.class.log :info, "Starting proxy request to: #{destination_uri}"
 
-      #begin
-      request = Rack::StreamingProxy::Request.new(destination_uri, current_request)
-      session = Rack::StreamingProxy::Session.new(request)
-      response = session.start
+      request  = Rack::StreamingProxy::Request.new(destination_uri, current_request)
+      begin
+        response = Rack::StreamingProxy::Session.new(request).start
+      rescue Exception => e # Rescuing only for the purpose of logging to rack.errors
+        log_rack_error(env, e)
+        raise e
+      end
+
       self.class.log :info, "Finishing proxy request to: #{destination_uri}"
       [response.status, response.headers, response]
-
-      #rescue RuntimeError => e # only want to catch proxy errors, not app errors
-      #  msg = "Proxy error when proxying to #{uri}: #{e.class}: #{e.message}"
-      #  env['rack.errors'].puts msg
-      #  env['rack.errors'].puts e.backtrace.map { |l| "\t" + l }
-      #  env['rack.errors'].flush
-      #  raise Error, msg
-      #end
 
     # Continue down the middleware stack if the request is not to be proxied.
     else
       @app.call(env)
     end
+  end
+
+private
+
+  def log_rack_error(env, e)
+    env['rack.errors'].puts e.message
+    env['rack.errors'].puts e.backtrace #.collect { |line| "\t" + line }
+    env['rack.errors'].flush
   end
 
 end

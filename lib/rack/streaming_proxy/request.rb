@@ -22,6 +22,10 @@ class Rack::StreamingProxy::Request
     @destination_uri.is_a? URI::HTTPS
   end
 
+  def uri
+    @destination_uri.to_s
+  end
+
 private
 
   def translate_request(current_request, uri)

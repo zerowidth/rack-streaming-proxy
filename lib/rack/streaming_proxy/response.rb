@@ -1,40 +1,13 @@
+require 'rack/streaming_proxy/errors'
+
 class Rack::StreamingProxy::Response
   include Rack::Utils # For HeaderHash
-
-  class Error           < RuntimeError; end
-  class ConnectionError < Error;        end
-  class HttpServerError < Error;        end
 
   attr_reader :status, :headers
 
   def initialize(piper)
     @piper = piper
-  end
-
-  def receive
-    # wait for the status and headers to come back from the child
-    if @status = read_from_remote
-      Rack::StreamingProxy::Proxy.log :debug, "Parent received: Status = #{@status}."
-
-      if Rack::StreamingProxy::Proxy.raise_on_5xx && @status.to_s =~ /^5..$/
-        Rack::StreamingProxy::Proxy.log :error, "Parent received #{@status} status!"
-        finish
-        raise HttpServerError
-      else
-        @body_permitted = read_from_remote
-        Rack::StreamingProxy::Proxy.log :debug, "Parent received: Reponse has body? = #{@body_permitted}."
-
-        @headers = HeaderHash.new(read_from_remote)
-
-        finish unless @body_permitted # If there is a body, finish will be called inside each.
-      end
-
-    else
-      Rack::StreamingProxy::Proxy.log :error, "Parent received unexpected nil status!"
-      finish
-      raise ConnectionError
-    end
-
+    receive
   end
 
   # This method is called by Rack itself, to iterate over the proxied contents.
@@ -43,7 +16,7 @@ class Rack::StreamingProxy::Response
       chunked = @headers['Transfer-Encoding'] == 'chunked'
       term = '\r\n'
 
-      while chunk = read_from_remote
+      while chunk = read_from_destination
         break if chunk == :done
         if chunked
           size = bytesize(chunk)
@@ -62,14 +35,36 @@ class Rack::StreamingProxy::Response
 
 private
 
+  def receive
+    # The first item received from the child will either be an HTTP status code or an Exception.
+    @status = read_from_destination
+
+    if @status.nil? # This should never happen
+      Rack::StreamingProxy::Proxy.log :error, "Parent received unexpected nil status!"
+      finish
+      raise Rack::StreamingProxy::UnknownError
+    elsif @status.kind_of? Exception
+      e = @status
+      Rack::StreamingProxy::Proxy.log :error, "Parent received an Exception from Child: #{e.class}: #{e.message}"
+      finish
+      raise e
+    end
+
+    Rack::StreamingProxy::Proxy.log :debug, "Parent received: Status = #{@status}."
+    @body_permitted = read_from_destination
+    Rack::StreamingProxy::Proxy.log :debug, "Parent received: Reponse has body? = #{@body_permitted}."
+    @headers = HeaderHash.new(read_from_destination)
+    finish unless @body_permitted # If there is a body, finish will be called inside each.
+  end
+
   # parent needs to wait for the child, or it results in the child process becoming defunct, resulting in zombie processes!
   # This is very important. See: http://siliconisland.ca/2013/04/26/beware-of-the-zombie-process-apocalypse/
   def finish
-    Rack::StreamingProxy::Proxy.log :debug, "Parent process #{Process.pid} waiting for child process #{@piper.pid} to exit."
+    Rack::StreamingProxy::Proxy.log :info, "Parent process #{Process.pid} waiting for child process #{@piper.pid} to exit."
     @piper.wait
   end
 
-  def read_from_remote
+  def read_from_destination
     @piper.gets
   end
 

@@ -22,10 +22,10 @@ To use inside a Rails app, add a `config/initializers/streaming_proxy.rb` initia
 require 'rack/streaming_proxy'
 
 YourRailsApp::Application.configure do
-  config.streaming_proxy.logger             = Rails.logger # stdout by default
-  config.streaming_proxy.log_verbosity      = :high        # :low or :high, :low by default
-  config.streaming_proxy.num_retries_on_5xx = 5            # 0 by default
-  config.streaming_proxy.raise_on_5xx       = true         # false by default
+  config.streaming_proxy.logger             = Rails.logger                          # stdout by default
+  config.streaming_proxy.log_verbosity      = Rails.env.production? ? :low : :high  # :low or :high, :low by default
+  config.streaming_proxy.num_retries_on_5xx = 5                                     # 0 by default
+  config.streaming_proxy.raise_on_5xx       = true                                  # false by default
 
   # Will be inserted at the end of the middleware stack by default.
   config.middleware.use Rack::StreamingProxy::Proxy do |request|
@@ -46,7 +46,7 @@ require 'rack/streaming_proxy'
 
 use Rack::StreamingProxy::Proxy do |request|
   if request.path.start_with?('/proxy')
-    # You probably want to get rid of the /proxy in the path, when requesting from the destination.
+    # You probably want to get rid of the '/proxy' in the path, when requesting from the destination.
     proxy_path = request.path.sub %r{^/proxy}, ''
     "http://www.another-server.com#{proxy_path}"
   end
