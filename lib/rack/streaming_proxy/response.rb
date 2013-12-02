@@ -14,7 +14,7 @@ class Rack::StreamingProxy::Response
   def each
     if @body_permitted
       chunked = @headers['Transfer-Encoding'] == 'chunked'
-      term = '\r\n'
+      term = "\r\n"
 
       while chunk = read_from_destination
         break if chunk == :done
