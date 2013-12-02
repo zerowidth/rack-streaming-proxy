@@ -3,7 +3,7 @@ require File.expand_path(
 
 use Rack::Lint
 # use Rack::CommonLogger
-use Rack::StreamingProxy do |req|
+use Rack::StreamingProxy::Proxy do |req|
   "http://localhost:4321#{req.path}"
 end
 run lambda { |env| [200, {}, ["should never get here..."]]}

@@ -1,7 +1,7 @@
 require 'yaml'
 require File.join(File.dirname(__FILE__), %w[spec_helper])
 
-describe Rack::StreamingProxy do
+describe Rack::StreamingProxy::Proxy do
   include Rack::Test::Methods
 
   APP_PORT = 4321 # hardcoded in proxy.ru as well!
@@ -10,7 +10,7 @@ describe Rack::StreamingProxy do
   def app
     @app ||= Rack::Builder.new do
       use Rack::Lint
-      use Rack::StreamingProxy do |req|
+      use Rack::StreamingProxy::Proxy do |req|
         # STDERR.puts "== incoming request env =="
         # STDERR.puts req.env
         # STDERR.puts "=^ incoming request env ^="
@@ -30,7 +30,7 @@ describe Rack::StreamingProxy do
   end
 
   before(:all) do
-    app_path = Rack::StreamingProxy.path("spec", "app.ru")
+    app_path = File.join(File.dirname(__FILE__), %w[app.ru])
     @app_server = Servolux::Child.new(
       # :command => "thin -R #{app_path} -p #{APP_PORT} start", # buffers!
       :command => "rackup #{app_path} -p #{APP_PORT}",
@@ -51,7 +51,7 @@ describe Rack::StreamingProxy do
   end
 
   def with_proxy_server
-    proxy_path = Rack::StreamingProxy.path("spec", "proxy.ru")
+    proxy_path = File.join(File.dirname(__FILE__), %w[proxy.ru])
     @proxy_server = Servolux::Child.new(
       :command => "rackup #{proxy_path} -p #{PROXY_PORT}",
       :timeout => 10,
@@ -139,8 +139,8 @@ describe Rack::StreamingProxy do
   end
 
   it "raises a Rack::Proxy::StreamingProxy error when something goes wrong" do
-    Rack::StreamingProxy::ProxyRequest.should_receive(:new).and_raise(RuntimeError.new("kaboom"))
-    lambda { get "/" }.should raise_error(Rack::StreamingProxy::Error, /proxy error.*kaboom/i)
+    Rack::StreamingProxy::Request.should_receive(:new).and_raise(RuntimeError.new("kaboom"))
+    lambda { get "/" }.should raise_error(RuntimeError, /kaboom/i)
   end
 
   it "does not raise a Rack::Proxy error if the app itself raises something" do
