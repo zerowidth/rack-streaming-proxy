@@ -74,6 +74,13 @@ class Rack::StreamingProxy::Proxy
         raise e
       end
 
+      # Notify client http version to the instance of Response class.
+      response.client_http_version = env['HTTP_VERSION'].sub(/HTTP\//, '')
+      if env['HTTP_VERSION'] < 'HTTP/1.1'
+        # Be compliant with RFC2146
+        response.headers.delete('Transfer-Encoding')
+      end
+
       self.class.log :info, "Finishing proxy request to: #{destination_uri}"
       [response.status, response.headers, response]
 
