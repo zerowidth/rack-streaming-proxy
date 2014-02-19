@@ -4,6 +4,68 @@ require File.join(File.dirname(__FILE__), %w[spec_helper])
 APP_PORT = 4321 # hardcoded in proxy.ru as well!
 PROXY_PORT = 4322
 
+shared_examples "rack-streaming-proxy" do
+  it "passes through to the rest of the stack if block returns false" do
+    get "/not_proxied"
+    last_response.should be_ok
+    last_response.body.should == "not proxied"
+  end
+
+  it "proxies a request back to the app server" do
+    get "/", {}, rack_env
+    last_response.should be_ok
+    last_response.body.should == "ALL GOOD"
+  end
+
+  it "handles POST, PUT, and DELETE methods" do
+    post "/env", {}, rack_env
+    last_response.should be_ok
+    last_response.body.should =~ /REQUEST_METHOD: POST/
+    put "/env", {}, rack_env
+    last_response.should be_ok
+    last_response.body.should =~ /REQUEST_METHOD: PUT/
+    delete "/env", {}, rack_env
+    last_response.should be_ok
+    last_response.body.should =~ /REQUEST_METHOD: DELETE/
+  end
+
+  it "sets a X-Forwarded-For header" do
+    post "/env", {}, rack_env
+    last_response.should =~ /HTTP_X_FORWARDED_FOR: 127.0.0.1/
+  end
+
+  it "preserves the post body" do
+    post "/env", {"foo" => "bar"}, rack_env
+    last_response.body.should =~ /rack.request.form_vars: foo=bar/
+  end
+
+  it "raises a Rack::Proxy::StreamingProxy error when something goes wrong" do
+    Rack::StreamingProxy::Request.should_receive(:new).and_raise(RuntimeError.new("kaboom"))
+    lambda { get "/" }.should raise_error(RuntimeError, /kaboom/i)
+  end
+
+  it "does not raise a Rack::Proxy error if the app itself raises something" do
+    lambda { get "/not_proxied/boom" }.should raise_error(RuntimeError, /app error/)
+  end
+
+  it "preserves cookies" do
+    set_cookie "foo"
+    post "/env", {}, rack_env
+    YAML::load(last_response.body)["HTTP_COOKIE"].should == "foo"
+  end
+
+  it "preserves authentication info" do
+    basic_authorize "admin", "secret"
+    post "/env", {}, rack_env
+    YAML::load(last_response.body)["HTTP_AUTHORIZATION"].should == "Basic YWRtaW46c2VjcmV0"
+  end
+
+  it "preserves arbitrary headers" do
+    get "/env", {}, rack_env.merge("HTTP_X_FOOHEADER" => "Bar")
+    YAML::load(last_response.body)["HTTP_X_FOOHEADER"].should == "Bar"
+  end
+end
+
 describe Rack::StreamingProxy::Proxy do
   include Rack::Test::Methods
 
@@ -50,71 +112,32 @@ describe Rack::StreamingProxy::Proxy do
     puts "----- app server is stopped -----"
   end
 
-  it "passes through to the rest of the stack if block returns false" do
-    get "/not_proxied"
-    last_response.should be_ok
-    last_response.body.should == "not proxied"
+  context 'client requests with HTTP/1.0' do
+    let(:rack_env) { {'HTTP_VERSION' => 'HTTP/1.0'} }
+    it_behaves_like 'rack-streaming-proxy'
+    it "does not use chunked encoding when the app server send chunked body" do
+      get "/stream", {}, rack_env
+      last_response.should be_ok
+      last_response.headers["Transfer-Encoding"].should be_nil
+      last_response.body.should == <<-EOS
+~~~~~ 0 ~~~~~
+~~~~~ 1 ~~~~~
+~~~~~ 2 ~~~~~
+~~~~~ 3 ~~~~~
+~~~~~ 4 ~~~~~
+      EOS
+    end
   end
 
-  it "proxies a request back to the app server" do
-    get "/"
-    last_response.should be_ok
-    last_response.body.should == "ALL GOOD"
-  end
-
-  it "uses chunked encoding when the app server send data that way" do
-    get "/stream"
-    last_response.should be_ok
-    last_response.headers["Transfer-Encoding"].should == "chunked"
-    last_response.body.should =~ /^e\r\n~~~~~ 0 ~~~~~\n\r\n/
-  end
-
-  it "handles POST, PUT, and DELETE methods" do
-    post "/env"
-    last_response.should be_ok
-    last_response.body.should =~ /REQUEST_METHOD: POST/
-    put "/env"
-    last_response.should be_ok
-    last_response.body.should =~ /REQUEST_METHOD: PUT/
-    delete "/env"
-    last_response.should be_ok
-    last_response.body.should =~ /REQUEST_METHOD: DELETE/
-  end
-
-  it "sets a X-Forwarded-For header" do
-    post "/env"
-    last_response.should =~ /HTTP_X_FORWARDED_FOR: 127.0.0.1/
-  end
-
-  it "preserves the post body" do
-    post "/env", "foo" => "bar"
-    last_response.body.should =~ /rack.request.form_vars: foo=bar/
-  end
-
-  it "raises a Rack::Proxy::StreamingProxy error when something goes wrong" do
-    Rack::StreamingProxy::Request.should_receive(:new).and_raise(RuntimeError.new("kaboom"))
-    lambda { get "/" }.should raise_error(RuntimeError, /kaboom/i)
-  end
-
-  it "does not raise a Rack::Proxy error if the app itself raises something" do
-    lambda { get "/not_proxied/boom" }.should raise_error(RuntimeError, /app error/)
-  end
-
-  it "preserves cookies" do
-    set_cookie "foo"
-    post "/env"
-    YAML::load(last_response.body)["HTTP_COOKIE"].should == "foo"
-  end
-
-  it "preserves authentication info" do
-    basic_authorize "admin", "secret"
-    post "/env"
-    YAML::load(last_response.body)["HTTP_AUTHORIZATION"].should == "Basic YWRtaW46c2VjcmV0"
-  end
-
-  it "preserves arbitrary headers" do
-    get "/env", {}, "HTTP_X_FOOHEADER" => "Bar"
-    YAML::load(last_response.body)["HTTP_X_FOOHEADER"].should == "Bar"
+  context 'client requests with HTTP/1.1' do
+    let(:rack_env) { {'HTTP_VERSION' => 'HTTP/1.1'} }
+    it_behaves_like 'rack-streaming-proxy'
+    it "uses chunked encoding when the app server send chunked body" do
+      get "/stream", {}, rack_env
+      last_response.should be_ok
+      last_response.headers["Transfer-Encoding"].should == 'chunked'
+      last_response.body.should =~ /^e\r\n~~~~~ 0 ~~~~~\n\r\n/
+    end
   end
 
 end
