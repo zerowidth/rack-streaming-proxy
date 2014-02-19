@@ -79,6 +79,13 @@ class Rack::StreamingProxy::Proxy
       if env['HTTP_VERSION'] < 'HTTP/1.1'
         # Be compliant with RFC2146
         response.headers.delete('Transfer-Encoding')
+        # Think about the case that an origin server replys with Content-Length
+        # header and Transfer-Encoding chunked header.  In Resopnse#each, 
+        # rack-streaming-proxy drops the delimiter and chunk length, so the 
+        # actual body length will be different from Content-Length header's 
+        # value sent from origin server.
+        # This is why I delete Content-Length header here.
+        response.headers.delete('Content-Length') if response.chunked?
       end
 
       self.class.log :info, "Finishing proxy request to: #{destination_uri}"

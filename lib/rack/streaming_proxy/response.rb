@@ -40,6 +40,10 @@ class Rack::StreamingProxy::Response
     end
   end
 
+  def chunked?
+    @chunked
+  end
+
 private
 
   def receive
