@@ -79,15 +79,15 @@ class Rack::StreamingProxy::Proxy
       if env['HTTP_VERSION'] < 'HTTP/1.1'
         # Be compliant with RFC2146
         response.headers.delete('Transfer-Encoding')
-        # Ideally, both a Content-Length header field and a Transfer-Encoding 
-        # header field are not expected to be present from servers which 
-        # are compliant with RFC2616. However, irresponsible servers may send 
-        # both to rack-streaming-proxy.
-        # RFC2616 says if a message is received with both a Transfer-Encoding 
-        # header field and a Content-Length header field, the latter MUST be 
-        # ignored. So I deleted a Content-Length header here.
-        response.headers.delete('Content-Length') if response.chunked?
       end
+      # Ideally, both a Content-Length header field and a Transfer-Encoding 
+      # header field are not expected to be present from servers which 
+      # are compliant with RFC2616. However, irresponsible servers may send 
+      # both to rack-streaming-proxy.
+      # RFC2616 says if a message is received with both a Transfer-Encoding 
+      # header field and a Content-Length header field, the latter MUST be 
+      # ignored. So I deleted a Content-Length header here.
+      response.headers.delete('Content-Length') if response.chunked?
 
       self.class.log :info, "Finishing proxy request to: #{destination_uri}"
       [response.status, response.headers, response]
