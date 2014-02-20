@@ -15,6 +15,9 @@ shared_examples "rack-streaming-proxy" do
     get "/", {}, rack_env
     last_response.should be_ok
     last_response.body.should == "ALL GOOD"
+    # Expect a Content-Length header field which the origin server sent is 
+    # not deleted by streaming-proxy.
+    last_response.headers["Content-Length"].should eq '8'
   end
 
   it "handles POST, PUT, and DELETE methods" do
@@ -118,7 +121,15 @@ describe Rack::StreamingProxy::Proxy do
     it "does not use chunked encoding when the app server send chunked body" do
       get "/stream", {}, rack_env
       last_response.should be_ok
+      # Expect a Transfer-Encoding header is deleted by rack-streaming-proxy
       last_response.headers["Transfer-Encoding"].should be_nil
+      # I expected a Content-Length header which the origin server sent was deleted,
+      # But the following test failed against my expectation. The reason is 
+      # that a Content-Length header was added in creating Rack::MockResponse 
+      # instance. So I gave up writing this test right now.
+      #
+      # last_response.headers["Content-Length"].should be_nil
+      #
       last_response.body.should == <<-EOS
 ~~~~~ 0 ~~~~~
 ~~~~~ 1 ~~~~~
@@ -136,6 +147,7 @@ describe Rack::StreamingProxy::Proxy do
       get "/stream", {}, rack_env
       last_response.should be_ok
       last_response.headers["Transfer-Encoding"].should == 'chunked'
+      last_response.headers["Content-Length"].should be_nil
       last_response.body.should =~ /^e\r\n~~~~~ 0 ~~~~~\n\r\n/
     end
   end
