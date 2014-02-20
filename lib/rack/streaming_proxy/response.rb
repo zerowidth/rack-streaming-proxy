@@ -4,24 +4,29 @@ class Rack::StreamingProxy::Response
   include Rack::Utils # For HeaderHash
 
   attr_reader :status, :headers
+  attr_accessor :client_http_version
 
   def initialize(piper)
     @piper = piper
+    @client_http_version = '1.1'
     receive
   end
 
   # This method is called by Rack itself, to iterate over the proxied contents.
   def each
     if @body_permitted
-      chunked = @headers['Transfer-Encoding'] == 'chunked'
       term = "\r\n"
 
       while chunk = read_from_destination
         break if chunk == :done
-        if chunked
+        if @chunked
           size = bytesize(chunk)
           next if size == 0
-          yield [size.to_s(16), term, chunk, term].join
+          if @client_http_version >= '1.1'
+            yield [size.to_s(16), term, chunk, term].join
+          else
+            yield chunk
+          end
         else
           yield chunk
         end
@@ -29,7 +34,9 @@ class Rack::StreamingProxy::Response
 
       finish
 
-      yield ['0', term, '', term].join if chunked
+      if @chunked && @client_http_version >= '1.1'
+        yield ['0', term, '', term].join
+      end
     end
   end
 
@@ -54,6 +61,7 @@ private
     @body_permitted = read_from_destination
     Rack::StreamingProxy::Proxy.log :debug, "Parent received: Reponse has body? = #{@body_permitted}."
     @headers = HeaderHash.new(read_from_destination)
+    @chunked = (@headers['Transfer-Encoding'] == 'chunked')
     finish unless @body_permitted # If there is a body, finish will be called inside each.
   end
 
