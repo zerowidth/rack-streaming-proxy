@@ -83,6 +83,12 @@ class Rack::StreamingProxy::Proxy
       # RFC2616 says if a message is received with both a Transfer-Encoding 
       # header field and a Content-Length header field, the latter MUST be 
       # ignored. So I deleted a Content-Length header here.
+      #
+      # Though there is a case that rack-streaming-proxy deletes both a 
+      # Content-Length and a Transfer-Encoding, a client can acknowledge the 
+      # end of body by closing the connection when the entire response has 
+      # been sent without a Content-Length header. So a Content-Length header 
+      # does not have to be required here in our understaing.
       response.headers.delete('Content-Length') if response.headers.has_key?('Transfer-Encoding')
       if env['HTTP_VERSION'] < 'HTTP/1.1'
         # Be compliant with RFC2146
