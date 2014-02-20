@@ -76,10 +76,6 @@ class Rack::StreamingProxy::Proxy
 
       # Notify client http version to the instance of Response class.
       response.client_http_version = env['HTTP_VERSION'].sub(/HTTP\//, '')
-      if env['HTTP_VERSION'] < 'HTTP/1.1'
-        # Be compliant with RFC2146
-        response.headers.delete('Transfer-Encoding')
-      end
       # Ideally, both a Content-Length header field and a Transfer-Encoding 
       # header field are not expected to be present from servers which 
       # are compliant with RFC2616. However, irresponsible servers may send 
@@ -87,7 +83,11 @@ class Rack::StreamingProxy::Proxy
       # RFC2616 says if a message is received with both a Transfer-Encoding 
       # header field and a Content-Length header field, the latter MUST be 
       # ignored. So I deleted a Content-Length header here.
-      response.headers.delete('Content-Length') if response.chunked?
+      response.headers.delete('Content-Length') if response.headers.has_key?('Transfer-Encoding')
+      if env['HTTP_VERSION'] < 'HTTP/1.1'
+        # Be compliant with RFC2146
+        response.headers.delete('Transfer-Encoding')
+      end
 
       self.class.log :info, "Finishing proxy request to: #{destination_uri}"
       [response.status, response.headers, response]
