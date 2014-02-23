@@ -31,7 +31,7 @@ end
 use Rack::ContentLength
 
 map "/" do
-  run lambda { |env| [200, {"Content-Type" => "text/plain"}, "ALL GOOD"] }
+  run lambda { |env| [200, {"Content-Type" => "text/plain"}, ["ALL GOOD"]] }
 end
 
 map "/stream" do
@@ -50,6 +50,6 @@ map "/env" do
 end
 
 map "/boom" do
-  run lambda { |env| [500, {"Content-Type" => "text/plain"}, "kaboom!"] }
+  run lambda { |env| [500, {"Content-Type" => "text/plain"}, ["kaboom!"]] }
 end
 
