@@ -6,11 +6,11 @@ require 'rack/streaming_proxy/version'
 Gem::Specification.new do |spec|
   spec.name          = 'rack-streaming-proxy'
   spec.version       = Rack::StreamingProxy::VERSION
-  spec.authors       = ['Fred Ngo', 'Nathan Witmer']
-  spec.email         = ['fredngo@gmail.com', 'nwitmer@gmail.com']
+  spec.authors       = ['Fred Ngo', 'Nathan Witmer', 'Naotoshi Seo']
+  spec.email         = ['fredngo@gmail.com', 'nwitmer@gmail.com', 'sonots@gmail.com']
   spec.description   = %q{Streaming proxy for Rack, the rainbows to Rack::Proxy's unicorn.}
   spec.summary       = %q{Streaming proxy for Rack, the rainbows to Rack::Proxy's unicorn.}
-  spec.homepage      = 'http://github.com/fredngo/rack-streaming-proxy'
+  spec.homepage      = 'http://github.com/zerowidth/rack-streaming-proxy'
   spec.license       = 'MIT'
 
   spec.files         = `git ls-files`.split($/)
