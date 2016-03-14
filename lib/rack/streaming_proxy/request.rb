@@ -26,6 +26,10 @@ class Rack::StreamingProxy::Request
     @destination_uri.to_s
   end
 
+  def fix_name(name)
+    name.sub(/^HTTP_/, '').gsub('_', '-')
+  end
+
 private
 
   def translate_request(current_request, uri)
@@ -44,7 +48,7 @@ private
 
     current_headers = current_request.env.reject { |key, value| !(key.match /^HTTP_/) }
     current_headers.each do |key, value|
-      fixed_name = key.sub(/^HTTP_/, '').gsub('_', '-')
+      fixed_name = fix_name(key)
       request[fixed_name] = value unless fixed_name.downcase == 'host'
     end
     request['X-Forwarded-For'] = (current_request.env['X-Forwarded-For'].to_s.split(/, +/) + [current_request.env['REMOTE_ADDR']]).join(', ')
