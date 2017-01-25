@@ -54,18 +54,23 @@ shared_examples "rack-streaming-proxy" do
   it "preserves cookies" do
     set_cookie "foo"
     post "/env", {}, rack_env
-    YAML::load(last_response.body)["HTTP_COOKIE"].should == "foo"
+
+    last_response.match("HTTP_COOKIE: ([^\n]*)")[1].should == "foo"
   end
 
   it "preserves authentication info" do
-    basic_authorize "admin", "secret"
+    # due to https://github.com/brynary/rack-test/issues/64
+    encoded_login = ["admin:secret"].pack("m0*")
+    header('Authorization', "Basic #{encoded_login}")
+
     post "/env", {}, rack_env
-    YAML::load(last_response.body)["HTTP_AUTHORIZATION"].should == "Basic YWRtaW46c2VjcmV0"
+
+    last_response.match("HTTP_AUTHORIZATION: ([^\n]*)")[1].should == "Basic YWRtaW46c2VjcmV0"
   end
 
   it "preserves arbitrary headers" do
     get "/env", {}, rack_env.merge("HTTP_X_FOOHEADER" => "Bar")
-    YAML::load(last_response.body)["HTTP_X_FOOHEADER"].should == "Bar"
+    last_response.match("HTTP_X_FOOHEADER: ([^\n]*)")[1].should == "Bar"
   end
 end
 

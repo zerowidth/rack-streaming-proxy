@@ -18,7 +18,7 @@ class Streamer
   def each
     term = "\r\n"
     @strings.each do |chunk|
-      size = bytesize(chunk)
+      size = chunk.bytesize
       yield [size.to_s(16), term, chunk, term].join
       sleep @sleep
     end

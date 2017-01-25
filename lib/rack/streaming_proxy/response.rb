@@ -20,7 +20,7 @@ class Rack::StreamingProxy::Response
       while chunk = read_from_destination
         break if chunk == :done
         if @chunked
-          size = bytesize(chunk)
+          size = chunk.bytesize
           next if size == 0
           if @client_http_version >= '1.1'
             yield [size.to_s(16), term, chunk, term].join
